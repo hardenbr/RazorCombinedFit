@@ -1,0 +1,8 @@
+[Had]
+variables = ['MR[250.,110.,3000]','Rsq[.2,.05,1.2]','nBtag[0,0,4]']
+variables_range = ['MR_FULL[110.,3000]','Rsq_FULL[.05,1.2]','nBtag_FULL[0,0,4]']
+#QCD from control box
+pdf_QCD = ['MR0_QCD[-4.2933,-200,200]','MR0_QCD_s[7.71]','R0_QCD[-.081883, -.1, 0]','R0_QCD_s[.00872]','b_QCD[.23994,.05,100]','b_QCD_s[.01600]','n_QCD[1,-1,1]','n_QCD_s[.528]']
+#pdf2_QCD =['MR02nd_QCD[-51.311,-300,300]','MR02nd_QCD_s[19.6]','R02nd_QCD[-.14912,-1,0]','R02nd_QCD_s[.0243]','b2nd_QCD[3.1418,.01,100]','b2nd_QCD_s[1.42]','n2nd_QCD_s[.563]']
+#others_QCD = ['Lumi[4980]','Ntot_QCD[6000,0,30000]','f2_QCD[.1,.001,.4]','f2_QCD_s[.0132]']
+others_QCD = ['Lumi[4980]','Ntot_QCD[6000,0,30000]']
