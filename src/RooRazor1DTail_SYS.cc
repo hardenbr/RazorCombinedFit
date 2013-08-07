@@ -41,7 +41,7 @@ Double_t RooRazor1DTail_SYS::evaluate() const
   if(mycoeff <= 0.) {
     //std::cout << "MYCOEFF = " << mycoeff <<", IS NEGATIVE -- BAD" << std::endl;
     return  1.7e-308;}
-  if(X0 >= X.min() || Y0 >= Y.min() || B <= 0. || N <= 0.) {
+  if(X0 >= X.min() || B <= 0. || N <= 0.) {
     //std::cout << "PARAMETERS OUT OF PHYSICAL, INTEGRABLE RANGES -- BAD" << std::endl;
     return  1.7e-308;}
 
@@ -60,7 +60,7 @@ Int_t RooRazor1DTail_SYS::getAnalyticalIntegral(RooArgSet& allVars, RooArgSet& a
 Double_t RooRazor1DTail_SYS::analyticalIntegral(Int_t code, const char* rangeName) const{
 
    const Double_t xmin = X.min(rangeName); const Double_t xmax = X.max(rangeName);
-   const Double_t ymin = Y.min(rangeName); const Double_t ymax = Y.max(rangeName);
+
 
    if(B <= 0. || N <= 0. || X0 >= X.min()) return 1.;
 
