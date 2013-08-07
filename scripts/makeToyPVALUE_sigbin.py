@@ -605,7 +605,7 @@ def writeFilesDrawHistos(MRbins, Rsqbins, h, hOBS, hEXP, hNS, pValHist, Box, out
     fGrayGraphs = []
     tlatexList = []
     col1 = rt.gROOT.GetColor(rt.kGray+1)
-    col1.SetAlpha(0.3)
+#    col1.SetAlpha(0.3)
     for iBinX in range(1,hNS.GetNbinsX()+1):
         for iBinY in range(1,hNS.GetNbinsY()+1):
             if hNS.GetBinContent(iBinX,iBinY)!= -999: continue

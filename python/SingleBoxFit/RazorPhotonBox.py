@@ -2,7 +2,8 @@ from RazorCombinedFit.Framework import Box
 import RootTools
 import RazorBox
 import ROOT as rt
-
+from makeBluePlot import *
+from array import *
 #this is global, to be reused in the plot making
 #def getBinning(boxName, varName):
 #    if varName == "MR" : return [110, 150.,...]
@@ -159,8 +160,23 @@ class RazorPhotonBox(RazorBox.RazorBox):
         xmax = max([self.workspace.var(xvarname).getMax(r) for r in ranges])
         
         # define 1D histograms
-        histoData = rt.TH1D("histoData", "histoData",nbins, xmin, xmax)
-        histoToy = rt.TH1D("histoToy", "histoToy",nbins, xmin, xmax)
+        bintuple = Binning("Had", True)
+        
+        rsq_bins = bintuple[1]
+        print rsq_bins
+        rsq_array = array("d",rsq_bins)
+
+        mr_bins = bintuple[0]
+        print mr_bins
+        mr_array = array("d",mr_bins)
+
+        if xmin < 1: #THIS IS AN RSQ
+            histoData = rt.TH1D("histoData", "histoData",len(rsq_bins)-1,rsq_array)
+            histoToy = rt.TH1D("histoToy", "histoToy",len(rsq_bins)-1, rsq_array)
+        else: #THIS IS AN MR HIST
+            histoData = rt.TH1D("histoData", "histoData",len(mr_bins)-1,mr_array)
+            histoToy = rt.TH1D("histoToy", "histoToy",len(mr_bins)-1, mr_array)
+
         
         def setName(h, name):
             h.SetName('%s_%s_%s_ALLCOMPONENTS' % (h.GetName(),name,'_'.join(ranges)) )
@@ -169,8 +185,8 @@ class RazorPhotonBox(RazorBox.RazorBox):
             if name == "MR": h.GetXaxis().SetTitle("M_{R} [GeV]")
             elif name == "Rsq": h.GetXaxis().SetTitle("R^{2}")
             # y axis
-            if name == "MR": h.GetYaxis().SetTitle("Events/(%i GeV)" %h.GetXaxis().GetBinWidth(1))
-            elif name == "Rsq": h.GetYaxis().SetTitle("Events/(%4.3f)" %h.GetXaxis().GetBinWidth(1))
+            if name == "MR": h.GetYaxis().SetTitle("N Events")
+            elif name == "Rsq": h.GetYaxis().SetTitle("N Events")
             # axis labels
             h.GetXaxis().SetTitleSize(0.05)
             h.GetYaxis().SetTitleSize(0.05)
@@ -189,6 +205,7 @@ class RazorPhotonBox(RazorBox.RazorBox):
         data.fillHistogram(histoData,rt.RooArgList(self.workspace.var(xvarname)))
         toyData.fillHistogram(histoToy,rt.RooArgList(self.workspace.var(xvarname)))
         print "histData " + str(histoData.Integral())
+        print "histToy " + str(histoToy.Integral())
         toyData.Print()
         scaleFactor = histoData.Integral()/histoToy.Integral()
 

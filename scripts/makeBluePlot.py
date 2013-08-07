@@ -9,11 +9,12 @@ def Binning(Box, noBtag):
         if noBtag or Box=="Jet1b": Rsqbins =  [0.25,0.3,0.35,0.40,0.45,0.50]
         else: Rsqbins =       [0.25,0.30,0.41,0.52,0.64,0.80,1.5]
     else:
-        MRbins =              [150, 200, 250, 300, 400,500,700,900,1500] #DIPHOTON
+        MRbins = [200,250,300,350,400,500,600,800,1000,1500,3000] #DIPHOTON                  
+        #MRbins =              [150, 200, 250, 300, 400,500,700,900,1500] 
         #MRbins =              [300, 350, 450, 550, 700, 900, 1200, 1600, 2500, 4000]
 #        if noBtag: Rsqbins =  [0.15,0.20,0.25,0.3,0.35,0.40,0.45,0.50]
-        if noBtag: Rsqbins =  [.05,.1,0.15,0.20,0.25,0.3,0.35,0.40,0.45,0.50] #DIPHOTON
-        else: Rsqbins =       [0.15,0.20,0.30,0.41,0.52,0.64,0.80,1.5]
+        if noBtag: Rsqbins =  [.01,.03,.05, .1, .15, .2, .25,.3, .35, .45, .6, 1] #DIPHOTON
+        else: Rsqbins =       [0.01,0.20,0.30,0.41,0.52,0.64,0.80,1.5]
     if noBtag: nBtagbins =    [0.0,1.0]
     else: nBtagbins =         [1.0,2.0,3.0,4.0]
     return MRbins, Rsqbins, nBtagbins
@@ -48,9 +49,9 @@ if __name__ == '__main__':
     if not plotOnly:
 #        os.system("python scripts/convertToyToROOT.py %s/frtoydata_%s" %(ToyDir, Box))
 #        os.system("rm %s.txt" %(ToyDir))
-#        os.system("ls %s/frtoydata_*.root > %s.txt" %(ToyDir, ToyDir))
+        os.system("ls %s/frtoydata_*.root > %s.txt" %(ToyDir, ToyDir))
         os.system("mkdir -p %s"%(Label))
-        os.system("python scripts/expectedYield_sigbin.py 1 %s/expected_sigbin_%s.root %s %s.txt %s"%(Label,Box, Box, ToyDir,noBtag))
+        os.system("python scripts/expectedYield_sigbin.py 1 %s/expected_sigbin_%s.root %s %s.txt %s"%(Label, Box, Box, ToyDir, noBtag))
         os.system("python scripts/makeToyPVALUE_sigbin.py %s %s/expected_sigbin_%s.root %s %s %s"%(Box, Label, Box, Data, Label, noBtag))
     else:
         os.system("mkdir -p %s"%(Label))

@@ -30,7 +30,7 @@ def convertTree2Dataset(tree, outputFile, outputBox, config, box, min, max):
     #rMin = rcuts[0]
 
     #iterate over selected entries in the input tree    
-    tree.Draw('>>elist','PFMR  >= %f && PFMR <= %f && PFR >= %f && PFR <= %f' % (mRmin,mRmax,rMin,rMax),'entrylist')
+    tree.Draw('>>elist','PFMR  >= %f && PFMR <= %f && PFR >= %f && PFR <= %f && iSamp==1' % (mRmin,mRmax,rMin,rMax),'entrylist')
     elist = rt.gDirectory.Get('elist')
     
     entry = -1;
@@ -44,7 +44,7 @@ def convertTree2Dataset(tree, outputFile, outputBox, config, box, min, max):
         a.setRealValue('MR',tree.PFMR)
         a.setRealValue('R',tree.PFR)
         a.setRealValue('nBtag', 0.)
-        a.setRealValue('Rsq',tree.PFR * tree.PFR)
+        a.setRealValue('Rsq',tree.PFR*tree.PFR)
         data.add(a)
     numEntries = data.numEntries()
     if min < 0: min = 0

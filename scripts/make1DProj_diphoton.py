@@ -212,11 +212,15 @@ if __name__ == '__main__':
     hMRTOTcopy = hMRTOT.Clone()
     hMRTOTcopy.SetName(hMRTOT.GetName()+"COPY")
     for i in range(1,len(errMR)+1):
+        diff = abs(errMR[i-1] - hMRTOT.GetBinError(i))
+        if(errMR[i-1] > hMRTOT.GetBinError(i)): print "USED TOY ERROR. Diff %f" % diff
         hMRTOTcopy.SetBinError(i,max(errMR[i-1],hMRTOT.GetBinError(i)))
         hMRTOT.SetBinError(i,0.)
     hRSQTOTcopy = hRSQTOT.Clone()
     hRSQTOTcopy.SetName(hRSQTOT.GetName()+"COPY")
     for i in range(1,len(errRSQ)+1):
+        diff = abs(errRSQ[i-1] - hRSQTOT.GetBinError(i))
+        if(errRSQ[i-1] > hRSQTOT.GetBinError(i)): print "USED TOY ERROR. Diff %f" % diff
         hRSQTOTcopy.SetBinError(i,max(errRSQ[i-1],hRSQTOT.GetBinError(i)))
         hRSQTOT.SetBinError(i,0.)
 
