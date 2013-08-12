@@ -36,8 +36,8 @@ RooRazor2DTail_SYS::RooRazor2DTail_SYS(const RooRazor2DTail_SYS& other, const ch
 //---------------------------------------------------------------------------
 Double_t RooRazor2DTail_SYS::evaluate() const
 {
-  double myexp = B*N*pow(fabs(X-X0)*fabs(Y-Y0),1./N);
-  double mycoeff = B*pow(fabs(X-X0)*fabs(Y-Y0),1./N) - 1.;
+  double myexp = B*N*pow(fabs(X-X0)*fabs(1.),1./N);
+  double mycoeff = B*pow(fabs(X-X0)*fabs(1.),1./N) - 1.;
   if(myexp < -700.) {
     //std::cout << "MYEXP = "<< myexp << ", < -700 -- BAD" << std::endl;
     return  1.7e-308;}
@@ -71,7 +71,7 @@ Double_t RooRazor2DTail_SYS::analyticalIntegral(Int_t code, const char* rangeNam
    if(B <= 0. || N <= 0. || X0 >= X.min() || Y0 >= Y.min()) return 1.;
 
    double integral = 0.;
-   if(code ==1) { // integral on both X and Y
+   /*   if(code ==1) { // integral on both X and Y
      integral = N/pow(B*N,N)*(Gfun(xmin,ymin)-Gfun(xmin,ymax)-Gfun(xmax,ymin)+Gfun(xmax,ymax));
    } else if(code == 2) { // integral on X
      integral = ( (xmin-X0)*exp(B*N*pow(xmax-X0,1/N)*pow(Y-Y0,1/N)) - (xmax-X0)*exp(B*N*pow(xmin-X0,1/N)*pow(Y-Y0,1/N)) )*exp(-B*N*(pow(xmin-X0,1/N)+pow(xmax-X0,1/N))*pow(Y-Y0,1/N));
@@ -82,6 +82,8 @@ Double_t RooRazor2DTail_SYS::analyticalIntegral(Int_t code, const char* rangeNam
      cout << "                           what are you integrating on?" << endl;
      return 1.;
    }
+   */
+   integral = ( (xmin-X0)*exp(B*N*pow(xmax-X0,1/N)*pow(1.,1/N)) - (xmax-X0)*exp(B*N*pow(xmin-X0,1/N)*pow(1.,1/N)) )*exp(-B*N*(pow(xmin-X0,1/N)+pow(xmax-X0,1/N))*pow(1.,1/N));
 
    return integral;
 }

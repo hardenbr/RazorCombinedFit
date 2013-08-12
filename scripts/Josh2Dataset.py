@@ -5,7 +5,7 @@ import RootTools
 from RazorCombinedFit.Framework import Config
 import math
 
-def convertTree2Dataset(tree, outputFile, outputBox, config, box, min, max):
+def convertTree2Dataset(tree, outputFile, outputBox, config, box, min, max, scale_factor):
     """This defines the format of the RooDataSet"""
     
     workspace = rt.RooWorkspace(box)
@@ -17,9 +17,9 @@ def convertTree2Dataset(tree, outputFile, outputBox, config, box, min, max):
     data = rt.RooDataSet('RMRTree','Selected R and MR',args)
     
     #we cut away events outside our MR window
-    mRmin = args['MR'].getMin()
+    mRmin = args['MR'].getMin() * scale_factor
     print mRmin
-    mRmax = args['MR'].getMax()
+    mRmax = args['MR'].getMax() * scale_factor
     #we cut away events outside our R window
     rMin = math.sqrt(args['Rsq'].getMin())
     rMax = math.sqrt(args['Rsq'].getMax())
@@ -30,7 +30,7 @@ def convertTree2Dataset(tree, outputFile, outputBox, config, box, min, max):
     #rMin = rcuts[0]
 
     #iterate over selected entries in the input tree    
-    tree.Draw('>>elist','PFMR  >= %f && PFMR <= %f && PFR >= %f && PFR <= %f && iSamp==1' % (mRmin,mRmax,rMin,rMax),'entrylist')
+    tree.Draw('>>elist','PFMR  >= %f && PFMR <= %f && PFR >= %f && PFR <= %f' % (mRmin,mRmax,rMin,rMax),'entrylist')
     elist = rt.gDirectory.Get('elist')
     
     entry = -1;
@@ -41,10 +41,10 @@ def convertTree2Dataset(tree, outputFile, outputBox, config, box, min, max):
 
         #set the RooArgSet and save
         a = rt.RooArgSet(args)
-        a.setRealValue('MR',tree.PFMR)
-        a.setRealValue('R',tree.PFR)
+        a.setRealValue('MR',tree.PFMR/scale_factor)
+        a.setRealValue('R',1.)
         a.setRealValue('nBtag', 0.)
-        a.setRealValue('Rsq',tree.PFR*tree.PFR)
+        a.setRealValue('Rsq',1.)
         data.add(a)
     numEntries = data.numEntries()
     if min < 0: min = 0
@@ -67,9 +67,12 @@ if __name__ == '__main__':
     parser.add_option('--max',dest="max",type="int",default=-1,
                   help="The last event to take from the input Dataset")
     parser.add_option('--min',dest="min",type="int",default=0,
-                  help="The first event to take from the input Dataset")  
+                  help="The first event to take from the input Dataset")
+    parser.add_option('--scale',dest="scale_factor",type="int",default=1,
+                  help="Scale M_R by this amount i.e. GeV-->TeV use 1000")  
     (options,args) = parser.parse_args()
-    
+
+
     if options.config is None:
         import inspect, os
         topDir = os.path.abspath(os.path.dirname(inspect.getsourcefile(convertTree2Dataset)))
@@ -83,7 +86,7 @@ if __name__ == '__main__':
             decorator = f[:-5]
             
             #dump the trees for the different datasets
-            convertTree2Dataset(input.Get('HggOutput'), decorator, 'Had.root', cfg,'Had',options.min,options.max)
+            convertTree2Dataset(input.Get('HggOutput'), decorator, 'Had.root', cfg,'Had',options.min,options.max,options.scale_factor)
             #convertTree2Dataset(input.Get('outTreeGG'), decorator, 'GaGa.root', cfg,'GaGa',options.min,options.max)
             #convertTree2Dataset(input.Get('outTreeGE'), decorator, 'Ele.root', cfg,'Ele',options.min,options.max)
             #convertTree2Dataset(input.Get('outTreeGM'), decorator, 'Mu.root', cfg,'Mu',options.min,options.max)

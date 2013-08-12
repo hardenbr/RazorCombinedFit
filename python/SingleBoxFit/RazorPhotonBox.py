@@ -29,7 +29,7 @@ class RazorPhotonBox(RazorBox.RazorBox):
     #add penalty terms and float
     def float1stComponent(self,flavour):
         self.fixParsExact("MR0_%s" % flavour, False)
-        self.fixParsExact("R0_%s" % flavour, False)
+#        self.fixParsExact("R0_%s" % flavour, False)
         self.fixParsExact("b_%s" % flavour, False)
         self.fixParsExact("n_%s" % flavour, False)        
 
@@ -169,13 +169,14 @@ class RazorPhotonBox(RazorBox.RazorBox):
         mr_bins = bintuple[0]
         print mr_bins
         mr_array = array("d",mr_bins)
+        histoData = rt.TH1D("histoData", "histoData",len(mr_bins)-1,mr_array)
+        histoToy = rt.TH1D("histoToy", "histoToy",len(mr_bins)-1, mr_array)
 
-        if xmin < 1: #THIS IS AN RSQ
-            histoData = rt.TH1D("histoData", "histoData",len(rsq_bins)-1,rsq_array)
-            histoToy = rt.TH1D("histoToy", "histoToy",len(rsq_bins)-1, rsq_array)
-        else: #THIS IS AN MR HIST
-            histoData = rt.TH1D("histoData", "histoData",len(mr_bins)-1,mr_array)
-            histoToy = rt.TH1D("histoToy", "histoToy",len(mr_bins)-1, mr_array)
+        #if xmin < 1: #THIS IS AN RSQ
+        #    histoData = rt.TH1D("histoData", "histoData",len(rsq_bins)-1,rsq_array)
+        #    histoToy = rt.TH1D("histoToy", "histoToy",len(rsq_bins)-1, rsq_array)
+        #else: #THIS IS AN MR HIST
+
 
         
         def setName(h, name):
