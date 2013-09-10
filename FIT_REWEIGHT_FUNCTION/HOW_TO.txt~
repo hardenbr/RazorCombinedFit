@@ -1,0 +1,4 @@
+
+#RUN MIX
+python fit_extrap.py -d ../../../../SIGNAL_INJECTION/mix.root -f ~/2013/RAZOR_DIPHOTON/CMSSW_6_1_1/src/RazorCombinedFit/razor_output.root -t 500 -m
+

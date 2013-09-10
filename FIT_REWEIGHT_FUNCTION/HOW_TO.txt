@@ -1,0 +1,6 @@
+
+#RUN MIX
+python fit_extrap.py -d ../../../../SIGNAL_INJECTION/mix.root -f ~/2013/RAZOR_DIPHOTON/CMSSW_6_1_1/src/RazorCombinedFit/razor_output.root -t 500 -m
+
+#JUST FAKE
+python fit_extrap.py -d /afs/cern.ch/work/h/hardenbr/2013/RAZOR_DIPHOTON/DATA/2012ABCD_FULL_Jan22.root -f ~/2013/RAZOR_DIPHOTON/CMSSW_6_1_1/src/RazorCombinedFit/razor_output_fake_mr400_rsq01_02_ABCD.root -t 10000

@@ -1,0 +1,21 @@
+#include "~/rootlogon.C"
+{
+
+
+  TFile f("weight_hist.root","READ");
+
+  hist_difference->Draw();
+
+  TCanvas c2;
+
+  hist_high_data->SetMarkerStyle(20);
+
+
+  hist_high_pred->SetLineColor(kAzure+10);
+  hist_high_pred->SetFillColor(kAzure+10);
+  hist_high_pred->SetFillStyle(3001);
+
+  hist_high_pred->Draw("e2");
+  hist_high_data->Draw("esame");     
+  c2->SetLogy();
+}
