@@ -1,8 +1,12 @@
 from  optparse  import OptionParser
 import ROOT as rt
 import RootTools
-import array,os
+import array, os
 
+#speed up the drawing by supressing x11
+rt.gROOT.SetBatch(True);
+
+#exponentially increasing bin sizes
 def makebins(start_,end_,inc_,inc_inc_):
     bin = start_
     inc = inc_
@@ -12,10 +16,12 @@ def makebins(start_,end_,inc_,inc_inc_):
         bin+=inc
         inc*=(1+inc_inc_)
     return list
-random = rt.TRandom()
-bins = makebins(.6, 4., .1, .3)
 
-parser = OptionParser(usage="usage python JoshToy.py -t n_toys -f file_name")
+random = rt.TRandom()
+
+bins = makebins(.4, 5., .1, .1)
+
+parser = OptionParser()
 
 parser.add_option("-f", "--file", dest="filename",
                   help="fit.root file name to analyze FILE",
@@ -32,7 +38,7 @@ parser.add_option("-t", "--toys", dest="n_toys",
                   action="store",type="int")
 
 parser.add_option("-m", "--mix", dest="domix",
-                 help="do mix or not",
+                 help="do signal mix or not",
                  default=False,
                  action="store_true")
 
@@ -40,6 +46,31 @@ parser.add_option("-p", "--print", dest="print_pdf",
                  help="print pdfs",
                  default=False,
                  action="store_true")
+
+parser.add_option("-n", "--nodraw", dest="draw",
+                 help="dont draw the result",
+                 default=False,
+                 action="store_true")
+
+parser.add_option("-e", "--debug", dest="debug",
+                 help="debug",
+                 default=False,
+                 action="store_true")
+
+parser.add_option("-r", "--rioff", dest="ri",
+                 help="offset for Rsq",
+                 default=0.0,
+                 action="store",type="float")
+
+parser.add_option("-s", "--samp", dest="samp",
+                 help="Sample Selection",
+                 default=1,
+                 action="store",type="int")
+
+parser.add_option("--mrmin", dest="mrmin",
+                 help="minimum mr for the low rsq fit",
+                 default=.4,
+                 action="store",type="float")
 
 
 (options, args) = parser.parse_args()
@@ -61,23 +92,26 @@ M0 = fr_list[0].getVal()#-.3477
 tree = data_file.Get("HggOutput")
 hist_signal = rt.TH1F("hist_signal","Signal",len(bins)-1,array.array("d",bins))
 hist_low_rsq_data = rt.TH1F("hist_low_data","Low Rsq Data",len(bins)-1,array.array("d",bins))
-hist_low_rsq_data_reweighted = rt.TH1F("hist_low_data_reweight","Low Rsq Data",len(bins)-1,array.array("d",bins))
 hist_high_rsq_data = rt.TH1F("hist_high_data","High Rsq Data",len(bins)-1,array.array("d",bins))
 #hist_high_pred = rt.TH1F("hist_high_pred","High Rsq Pred",len(bins)-1,array.array("d",bins))
 
+mr_min_low = options.mrmin
 mr_min = bins[0]
 mr_cutoff = 5
 rsq_cutoff = 5
 
-r0 = .01
-r1 = .02
+r0_cut = .01
+r1_cut = .02
 
-low_cut = "(PFMR/1000.)>%f && PFR^2 > %f && PFR^2 < %f && iSamp==1" % (mr_min,r0, r1)
-high_cut = "(PFMR/1000.)>%f && PFR^2 > %f && iSamp==1" % (mr_min,r1)
+r0 = r0_cut - options.ri
+r1 = r1_cut - options.ri
+
+low_cut = "(PFMR/1000.)>%f && PFR^2 > %f && PFR^2 < %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min,r0_cut, r1_cut,options.samp)
+high_cut = "(PFMR/1000.)>%f && PFR^2 > %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min,r1_cut,options.samp)
 
 if do_mix:
-    low_cut = "(PFMR)>%f && PFR^2 > %f && PFR^2 < %f " % (mr_min,r0, r1)
-    high_cut = "(PFMR)>%f && PFR^2 > %f" % (mr_min,r1)
+    low_cut = "(PFMR)>%f && PFR^2 > %f && PFR^2 < %f " % (mr_min,r0_cut, r1_cut)
+    high_cut = "(PFMR)>%f && PFR^2 > %f" % (mr_min,r1_cut)
 
 print low_cut
 print high_cut
@@ -88,27 +122,26 @@ n_high_rsq = tree.GetEntries(high_cut)
 print "nlow: ", n_low_rsq
 print "nhigh: ", n_high_rsq
 
-b_high = b_low * (pow(((r1)/(r0)),1/n))
-R0_high = 0
+b_high = b_low #* pow(r1,1/n)
 n_high = n
 M0_high = M0
 
 
 def Gamma(a,x):
     val = rt.TMath.Gamma(a)*rt.Math.inc_gamma_c(a,x)
-#    print "gamma", val
+    if options.debug: print "gamma", val
     return val
 
 def Gfun(m,r,b,n):
-    val =  n/pow(b*n,n)*Gamma(n,b*n*pow(m*r,1/n))
-#    print "gfun", val
+    val =  n/pow(b*n,n)*(Gamma(n,b*n*pow(m*r,1/n))*pow(10,200))
+    if options.debug: print "gfun", val
     return val
 
 def integral(r, m1, m2, b, M0, n):
-    return (Gfun(m1-M0,r-R0,b,n) - Gfun(m2-M0,r-R0,b,n))
+    return (Gfun(m1-M0,r,b,n) - Gfun(m2-M0,r,b,n))
 
 def integral_fit(m1, m2, b, M0 ,n):
-    return (Gfun(m1-M0,1,b,n) - Gfun(m2-M0,1,b,n))*(pow(10,200))
+    return (Gfun(m1-M0,1,b,n) - Gfun(m2-M0,1,b,n))
 
 def meanstdv(x):
     from math import sqrt
@@ -151,7 +184,7 @@ def get_bin_errors(fr, norm):
         name_low = "low_bin%i" % ii
 
         if ii < 4:
-            hist_high = rt.TH1D(name_high,name_high, 800,0,800)
+            hist_high = rt.TH1D(name_high,name_high, 100000,0,100000)
             hist_low = rt.TH1D(name_low,name_low, 10000,0,100000)
         else:
             hist_high = rt.TH1D(name_high,name_high, 50,0,50)
@@ -174,18 +207,21 @@ def get_bin_errors(fr, norm):
         n_toy = list[3].getVal()
 
         #cant be evaluated
-        if n_toy > 80: continue
+#        if n_toy > 80: continue
+
         
         #derive the high rsq region parameters
-        b_high_toy = b_toy * (pow(((r1)/(r0)),1/n_toy))
-        R0_high_toy = 0
+        b_high_toy = b_toy #* pow(r1,1/n_toy)
         n_high_toy = n_toy
         M0_high_toy = MR_toy
 
+        if options.debug: print "b", b_high_toy, "n",n_high_toy
 
         #find the fit normalization
-        int_low = integral_fit(mr_min, mr_cutoff, b_toy, MR_toy, n_toy)
-        int_high = integral_fit(mr_min, mr_cutoff, b_high_toy, M0_high_toy, n_high_toy)
+        if options.debug: print "\ndoing low integral.."
+        int_low = integral(r0,mr_min_low, mr_cutoff, b_toy, MR_toy, n_toy)
+        if options.debug: print "\ndoing high integral.."
+        int_high = integral(r1,mr_min, mr_cutoff, b_high_toy, M0_high_toy, n_high_toy)
 
         if int_low ==0 or int_high == 0:continue
 
@@ -197,8 +233,8 @@ def get_bin_errors(fr, norm):
             m2 = bins[jj+1]
 
             #do the integral for the bin
-            high = integral_fit(m1, m2, b_high_toy, M0_high_toy, n_high_toy) * norm / int_high 
-            low = integral_fit(m1, m2, b_toy, MR_toy, n_toy) * Ntot_toy / int_low
+            high = integral(r1,m1, m2, b_high_toy, M0_high_toy, n_high_toy) * norm / int_high 
+            low = integral(r0,m1, m2, b_toy, MR_toy, n_toy) * Ntot_toy / int_low
 
             low_list[jj].append(low)            
             high_list[jj].append(high)
@@ -214,13 +250,13 @@ def get_bin_errors(fr, norm):
 
 
 if do_mix:
-    tree.Draw("PFMR>>hist_low_data","PFMR>%f&&PFR^2>%f && PFR^2 < %f" % (mr_min, r0, r1))
-    tree.Draw("PFMR>>hist_high_data","PFMR>%f&&PFR^2>%f" % (mr_min, r1))
+    tree.Draw("PFMR>>hist_low_data","PFMR>%f&&PFR^2>%f && PFR^2 < %f && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min, r0, r1))
+    tree.Draw("PFMR>>hist_high_data","PFMR>%f&&PFR^2>%f && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min, r1))
     tree.Draw("PFMR>>hist_signal","PFMR>%f&&PFR^2>%f&&!isFake" % (mr_min, r1))
     
 else:
-    tree.Draw("PFMR/1000>>hist_low_data","PFMR>%f&&PFR^2>%f && PFR^2 < %f&&iSamp==1" % (mr_min, r0, r1))
-    tree.Draw("PFMR/1000>>hist_high_data","PFMR>%f&&PFR^2>%f&&iSamp==1" % (mr_min, r1))
+    tree.Draw("PFMR/1000>>hist_low_data","PFMR>%f&&PFR^2>%f && PFR^2 < %f&&iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min, r0, r1, options.samp))
+    tree.Draw("PFMR/1000>>hist_high_data","PFMR>%f&&PFR^2>%f&&iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min, r1,options.samp))
 
 file = rt.TFile("weight_hist.root","RECREATE")
     
@@ -236,8 +272,9 @@ n_high_rsq_data = hist_high_rsq_data.Integral()
 (low_errors, high_errors) = get_sigma(low_list,high_list)
 
 #fit the histograms
-for ii in hists_low:
-    ii.Fit("gaus")
+for ii in hists_low:    
+    print "\n",ii
+    ii.Fit("gaus")    
     print ii.GetFunction("gaus")
 for ii in hists_high:
     ii.Fit("gaus")
@@ -248,16 +285,21 @@ for ii in range(len(bins) - 1):
     m2 = bins[ii+1]
 
     #normalization integrals
-    int_low = integral_fit(mr_min, mr_cutoff, b_low, M0, n)
-    int_high = integral_fit(mr_min, mr_cutoff, b_high, M0_high, n_high) 
+    if options.debug: print "doing low integral.."    
+    int_low = integral(r0,mr_min, mr_cutoff, b_low, M0, n)
+    if options.debug: print "doing high integral.."
+    int_high = integral(r1,mr_min, mr_cutoff, b_high, M0_high, n_high) 
     
     #fit integrals per bin
-    low = integral_fit(m1, m2, b_low, M0, n)         
-    high = integral_fit(m1, m2, b_high, M0_high, n_high) 
+
+    low = integral(r0,m1, m2, b_low, M0, n)         
+    high = integral(r1,m1, m2, b_high, M0_high, n_high) 
 
     #scaling
     low *= 1. / int_low * (n_low_rsq)
     high *= 1. / int_high * (n_high_rsq)
+
+    print "bin: (%f,%f) low: %f high: %f" % (m1,m2,low,high)
 
     if low != 0:
         ratio = (high/low)
@@ -274,10 +316,12 @@ for ii in range(len(bins) - 1):
     low_func = fit_low_hist.GetFunction("gaus")
     high_func = fit_high_hist.GetFunction("gaus")
 
-    print fit_low_hist, low_func
+    low_error = high_error = 1
 
-    low_error = low_func.GetParameter(2)
-    high_error = high_func.GetParameter(2)
+    if fit_low_hist.Integral() > 0: low_error = low_func.GetParameter(2)
+    if fit_high_hist.Integral() > 0: high_error = high_func.GetParameter(2)
+
+    print "\t\t low_error: %f high_error: %f" % (low_error,high_error)
 
     hist_low_rsq.SetBinError(ii+1, low_error)
     hist_high_rsq.SetBinError(ii+1, high_error)
@@ -286,6 +330,7 @@ for ii in range(len(bins) - 1):
                      
 #clone the low rsq
 hist_ratio = hist_low_rsq.Clone("hist_ratio")
+hist_low_pred = hist_low_rsq.Clone("hist_low_pred")
 hist_high_pred = hist_high_rsq.Clone("hist_high_pred")
 hist_difference = hist_high_rsq_data.Clone("hist_difference")
 
@@ -327,6 +372,7 @@ hist_high_rsq_data.SetMarkerStyle(14)
 hist_high_rsq_data.GetYaxis().SetTitle("N Events")
 
 hist_difference.Write()
+hist_low_pred.Write()
 hist_low_rsq_data.Write()
 hist_high_pred.Write()
 hist_high_rsq_data.Write()
@@ -336,26 +382,22 @@ hist_high_rsq.Write()
 hist_ratio.Write()
 hist_signal.Write()
 
+#loop over all the low bins and setup the histograms
 for ii in range(len(hists_low)):
     max_val = max(low_list[ii])
     min_val = min(low_list[ii])
-
-
-#    hists_low[ii].GetXaxis().SetRangeUser(min_val,max_val)
-
-    hists_low[ii].GetXaxis().SetTitle("N Events %i < M_{R} (TeV) < %i" % (bins[ii],bins[ii+1]))
+    
+    hists_low[ii].GetXaxis().SetTitle("N Events %2.1f < M_{R} (TeV) < %2.1f" % (bins[ii],bins[ii+1]))
     hists_low[ii].GetYaxis().SetTitle("N Toys")
     hists_low[ii].GetXaxis().SetTitleSize(.07)
     hists_low[ii].GetYaxis().SetTitleSize(.07)
     hists_low[ii].Write()
 
+#loop over high bins and setup histograms
 for ii in range(len(hists_high)):
-
     max_val = max(high_list[ii])
     min_val = min(high_list[ii])
 
-    
-#    hists_high[ii].GetXaxis().SetRangeUser(min_val,max_val)
     hists_high[ii].GetXaxis().SetTitle("N Events %2.1f < M_{R} (TeV) < %2.1f" % (bins[ii],bins[ii+1]))
 
     hists_high[ii].GetYaxis().SetTitle("N Toys")
@@ -365,12 +407,17 @@ for ii in range(len(hists_high)):
     
     hists_high[ii].Write()
 
+
 for ii in range(len(hists_high)):
 
     gaus = hists_high[ii].GetFunction("gaus")
 
-    gaus_mean = gaus.GetParameter(1)
-    gaus_sigma = gaus.GetParameter(2)
+    gaus_mean = 0
+    gaus_sigma = 1
+
+    if hists_high[ii].Integral() > 0 :
+        gaus_mean = gaus.GetParameter(1)
+        gaus_sigma = gaus.GetParameter(2)
 
     error = gaus_sigma
 
@@ -435,9 +482,7 @@ for ii in range(len(hists_high)):
     
     fill_1s.SetFillStyle(3004)
     fill_2s.SetFillStyle(3005)
-    fill_3s.SetFillStyle(3004)
-    
-
+    fill_3s.SetFillStyle(3004)    
 
     print absmin,absmax
     
@@ -461,9 +506,11 @@ for ii in range(len(hists_high)):
     fill_2s.Draw("same")
     fill_3s.Draw("same")
 
-
+    #top of the gaussian
+    highest_point = 0
+    if gaus_mean != 0: highest_point = gaus.Eval(gaus_mean)
     
-    line_mean = rt.TLine(gaus_mean, 0, gaus_mean, gaus.Eval(gaus_mean))
+    line_mean = rt.TLine(gaus_mean, 0, gaus_mean, highest_point)
     line_mean.SetLineColor(rt.kRed)
     line_mean.SetLineWidth(3)
     line_mean.Draw("same")
@@ -496,7 +543,7 @@ for ii in range(len(hists_high)):
     delta_text.SetTextSize(0.06);
     delta_text.SetFillColor(0); 
     delta_text.SetTextAlign(12);
-    delta_text.AddText("#Delta = (N data - #mu_{gaus}) / #sigma_{gaus} = %2.2f " % delta);   
+    delta_text.AddText("#Delta = (N data - #mu_{gaus}) / #sigma_{gaus} = %2.2f" % delta);   
     delta_text.Draw("same");
     
     canvas.Write()
@@ -504,8 +551,164 @@ for ii in range(len(hists_high)):
     if options.print_pdf:
         canvas.SaveAs("canvas_%i.pdf" % ii)
 
+for ii in range(len(hists_low)):
+    max_val = max(low_list[ii])
+    min_val = min(low_list[ii])
+
+    hists_low[ii].GetXaxis().SetTitle("N Events %2.1f < M_{R} (TeV) < %2.1f" % (bins[ii],bins[ii+1]))
+
+    hists_low[ii].GetYaxis().SetTitle("N Toys")
+    
+    hists_low[ii].GetXaxis().SetTitleSize(.07)
+    hists_low[ii].GetYaxis().SetTitleSize(.07)
+    
+    hists_low[ii].Write()
+
+
+for ii in range(len(hists_low)):
+
+    gaus = hists_low[ii].GetFunction("gaus")
+
+    gaus_mean = 0
+    gaus_sigma = 1
+
+    if hists_low[ii].Integral() > 0 :
+        gaus_mean = gaus.GetParameter(1)
+        gaus_sigma = gaus.GetParameter(2)
+
+    error = gaus_sigma
+
+    true_val = hist_low_rsq_data.GetBinContent(ii+1)
+
+    rt.gStyle.SetLabelSize(0.05,"xyz");
+  
+    rt.gStyle.SetPadTopMargin(0.1);
+    rt.gStyle.SetPadRightMargin(0.10);
+    rt.gStyle.SetPadBottomMargin(0.2);
+    rt.gStyle.SetPadLeftMargin(0.15);
+
+    canvas = rt.TCanvas("low_canvas_bin%i"%ii,"Bin %i" %ii, 1024,768)
+
+    max_val = max(low_list[ii])
+    min_val = min(low_list[ii])
+    
+
+    p1 = gaus_mean + error
+    p2 = gaus_mean + 2 * error
+    p3 = gaus_mean + 3 * error
+    
+    m1 = gaus_mean - error
+    m2 = gaus_mean - 2 * error
+    m3 = gaus_mean - 3 * error
+
+
+    absmin = min([min_val, m3])
+    absmax = max([max_val, max_val, p3])
+
+    max_hist = hists_low[ii].GetMaximum()
+
+    graph1s = None
+    graph2s = None
+    
+    left_win1s = max(0,m1)
+    right_win1s = p1
+
+    left_win2s = max(0,m2)
+    right_win2s = p2
+
+    left_win3s = max(0,m3)
+    right_win3s = p3
+        
+    array1s_x = array.array("d",[left_win1s,left_win1s,right_win1s,right_win1s])
+    array2s_x = array.array("d",[left_win2s,left_win2s,right_win2s,right_win2s])
+    array3s_x = array.array("d",[left_win3s,left_win3s,right_win3s,right_win3s])
+
+    array1s_y = array.array("d",[2*max_hist/10.,3.*max_hist/10.,3.*max_hist/10.,2*max_hist/10.])
+    array2s_y = array.array("d",[max_hist/10.,2.*max_hist/10.,2.*max_hist/10.,max_hist/10.])
+    array3s_y = array.array("d",[0,max_hist/10.,max_hist/10.,0])
+
+
+
+    fill_1s = rt.TGraph(4,array1s_x,array1s_y)
+    fill_2s = rt.TGraph(4,array2s_x,array2s_y)
+    fill_3s = rt.TGraph(4,array3s_x,array3s_y)
+
+    fill_1s.SetFillColor(rt.kRed)
+    fill_2s.SetFillColor(rt.kBlue)    
+    fill_3s.SetFillColor(rt.kGreen)
+    
+    fill_1s.SetFillStyle(3004)
+    fill_2s.SetFillStyle(3005)
+    fill_3s.SetFillStyle(3004)    
+
+    print absmin,absmax
+    
+    hists_low[ii].GetXaxis().SetRangeUser(absmin, absmax)
+    #    hists_low[ii].SetMarkerStyle(20)
+    #    hists_low[ii].SetFillStyle(3004)
+
+
+    hists_low[ii].Draw()
+
+    line = rt.TLine(true_val, 0, true_val, max_hist)
+    line.SetLineWidth(3)
+    line.Draw("same")
+
+    fill_1s.Draw("same")
+    fill_2s.Draw("same")
+    fill_3s.Draw("same")
+
+    #top of the gaussian
+    lowest_point = 0
+    if gaus_mean != 0: lowest_point = gaus.Eval(gaus_mean)
+    
+    line_mean = rt.TLine(gaus_mean, 0, gaus_mean, lowest_point)
+    line_mean.SetLineColor(rt.kRed)
+    line_mean.SetLineWidth(3)
+    line_mean.Draw("same")
+
+    #    hists_low[ii].SetLineStyle(2)
+    hists_low[ii].SetFillColor(rt.kBlue)
+    hists_low[ii].SetFillStyle(3005)
+    hists_low[ii].SetLineWidth(1)
+    hists_low[ii].SetLineColor(rt.kBlue)
+
+    legend = rt.TLegend(.415,.394,.86,.738)
+#    legend.AddEntry(pois,"Poisson Distribution on Data","l")
+    legend.AddEntry(hists_low[ii],"Toy Distribution","f")
+    legend.AddEntry(gaus,"Gaussian Fit","l")
+    legend.AddEntry(line, "N Observed","l")
+#    legend.AddEntry(fill_1s,"1 #sigma confidence","f")
+#    legend.AddEntry(fill_2s,"2 #sigma confidence","f")
+#    legend.AddEntry(fill_3s,"99.7% confidence","f")
+
+    legend.SetFillColor(0)
+    legend.SetLineColor(0)
+
+    if not options.print_pdf: legend.Draw("same")
+
+    delta_text= rt.TPaveText(.125,1,.9,.9,"NDC");
+
+    print gaus_mean , true_val, gaus_sigma , "delta", delta
+
+    delta = abs(gaus_mean - true_val) / gaus_sigma
+
+    delta_text.SetTextFont(42);
+    delta_text.SetTextSize(0.06);
+    delta_text.SetFillColor(0); 
+    delta_text.SetTextAlign(12);
+    delta_text.AddText("#Delta = (N data - #mu_{gaus}) / #sigma_{gaus} = %2.2f" % delta);   
+    delta_text.Draw("same");
+    
+    canvas.Write()
+
+    if options.print_pdf:
+        canvas.SaveAs("canvas_%i.pdf" % ii)
+
+
 file.Close()
 
 if do_mix:
     os.system("cp weight_hist.root weight_hist_mix.root")
-os.system("root -l -c ~/rootlogon.C ratio_extrap.C")
+if not options.draw:
+    os.system("root -l -c ~/rootlogon.C ratio_extrap.C")

@@ -18,36 +18,41 @@ class RooRazor2DTail_SYS : public RooAbsPdf
 {
 public:
    RooRazor2DTail_SYS() {} ;
+
    RooRazor2DTail_SYS(const char *name, const char *title,
-		  RooAbsReal &_x, RooAbsReal &_y, 
-		  RooAbsReal &_x0, RooAbsReal &_y0,
-		      RooAbsReal &_b, RooAbsReal &_n);
+		      RooAbsReal &_x, RooAbsReal &_y, 
+		      RooAbsReal &_x0, RooAbsReal &_y0,
+		      RooAbsReal &_b, RooAbsReal &_n, 
+		      RooAbsReal &_r0, RooAbsReal &_r1, RooAbsReal &_ri);
+   
    RooRazor2DTail_SYS(const RooRazor2DTail_SYS& other,
-      const char* name = 0);
+		      const char* name = 0);
    virtual TObject* clone(const char* newname) const { return new RooRazor2DTail_SYS(*this,newname); }
    inline virtual ~RooRazor2DTail_SYS() { }
-
+   
    Int_t getAnalyticalIntegral(RooArgSet& allVars, RooArgSet& analVars, const char* rangeName=0) const;
+   
    Double_t analyticalIntegral(Int_t code, const char* rangeName=0) const;
-
-protected:
-
+   
+ protected:
+   
    Double_t Chop(const Double_t x) const{
-           return (TMath::Abs(x - 0) < 1e-30) ? TMath::Sign(0.0,x) : x;
+     return (TMath::Abs(x - 0) < 1e-30) ? TMath::Sign(0.0,x) : x;
    }
    Double_t Power(const Double_t x, const Double_t y) const{
-	   return Chop(TMath::Power(x,y));
+     return Chop(TMath::Power(x,y));
    }
    Double_t Gamma(const Double_t a, const Double_t x) const{
-	   return TMath::Gamma(a)*ROOT::Math::inc_gamma_c(a,x);
+     return TMath::Gamma(a)*ROOT::Math::inc_gamma_c(a,x);
    }
    Double_t ExpIntegralEi(const Double_t z) const{
-	   return Chop(ROOT::Math::expint(z));
+     return Chop(ROOT::Math::expint(z));
    }
-
-   Double_t Gfun(const Double_t x, const Double_t y) const{
-     std::cout << "Gamma(N=" << N << ",BN[(x-X0)(y-Y0)]^(1/N)=" << B*N*pow(x-X0,1/N)*pow(y-Y0,1/N) <<") = " <<  Gamma(N,B*N*pow(x-X0,1/N)*pow(y-Y0,1/N)) << std::endl;
-     return Gamma(N,B*N*pow((x-X0)*(y-Y0),1/N));
+   
+   Double_t Gfun(const Double_t x, const Double_t y, const Double_t r) const{
+     //     std::cout << "Gamma(N=" << N << ",BN[(x-X0)(y-Y0)]^(1/N)=" << B*N*pow(x-X0,1/N)*pow(y-Y0,1/N) <<") = " <<  Gamma(N,B*N*pow(x-X0,1/N)*pow(y-Y0,1/N)) << std::endl;
+     //     return Gamma(N,B*N*pow((x-X0)*(y-Y0),1/N)); //2D
+     return Gamma(N,B*N*pow(r*(x-X0),1/N)); //1D
    }
 
    RooRealProxy X;        // dependent variable
@@ -56,6 +61,12 @@ protected:
    RooRealProxy Y0;       // Y offset
    RooRealProxy B;        // shape parameter
    RooRealProxy N;        // shape parameter
+   RooRealProxy R0;
+   RooRealProxy R1;
+   RooRealProxy RI;
+   
+   //   RooRealProxy last_N;
+   //   RooRealProxy last_B;
 
    Double_t evaluate() const;
 private:

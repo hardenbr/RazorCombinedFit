@@ -3,6 +3,8 @@ import sys
 import ROOT as rt
 from optparse import OptionParser
 
+rt.gROOT.SetBatch(True)
+
 class Marker(object):
     pass
 

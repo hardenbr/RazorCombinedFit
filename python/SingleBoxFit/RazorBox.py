@@ -59,7 +59,7 @@ class RazorBox(Box.Box):
         if self.fitMode == "2D":
             # define the R^2 vs MR
             if doSYS == True:
-                self.workspace.factory("RooRazor2DTail_SYS::RazPDF%s(MR,Rsq,MR0%s,R0%s,b%s,n%s)" %(label,label,label,label,label))
+                self.workspace.factory("RooRazor2DTail_SYS::RazPDF%s(MR,Rsq,MR0%s,R0%s,b%s,n%s,R0%s,R1%s,RI%s)" %(label,label,label,label,label,label,label,label))
                 #tail-systematic parameter
                 self.workspace.var("n%s" %label).setConstant(rt.kFALSE)
             else:

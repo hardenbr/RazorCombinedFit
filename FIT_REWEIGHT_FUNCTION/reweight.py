@@ -4,7 +4,7 @@ import array,os
 #bins = [.400, .450, .500,.550,.6,.7,.800, 1.000, 1.500,2,2.5, 3]
 bins = [.6,.8,1,1.25, 1.5,1.75, 2, 2.25, 2.5, 3,3.5]
 
-data_file = rt.TFile("/afs/cern.ch/work/h/hardenbr/2013/RAZOR_DIPHOTON/DATA/2012ABCD_FULL_Jan22.root","READ")
+data_file = rt.TFile("/afs/cern.ch/work/h/hardenbr/2014/RAZOR_DIPHOTON/DATA/2012ABCD_selected_FULL.root","READ")
 
 do_mix = False
 
@@ -41,10 +41,10 @@ n_high_rsq = tree.GetEntries(high_cut)
 print "nlow: ", n_low_rsq
 print "nhigh: ", n_high_rsq
 
-b_low = 9.63 #* 1 /( pow(r0, 1/n))# + pow(r1, 1/n))
-R0 = 0
-n = 58.291
-M0 = -.3477
+b_low = 11.879#9.63 #* 1 /( pow(r0, 1/n))# + pow(r1, 1/n))
+R0 = .003 #0
+n = 63.736#58.291
+M0 = -.49875#-.3477
 
 if do_mix:
     b_low = 12.311

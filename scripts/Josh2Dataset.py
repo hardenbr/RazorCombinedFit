@@ -30,7 +30,11 @@ def convertTree2Dataset(tree, outputFile, outputBox, config, box, min, max, scal
     #rMin = rcuts[0]
 
     #iterate over selected entries in the input tree    
-    tree.Draw('>>elist','PFMR  >= %f && PFMR <= %f && PFR >= %f && PFR <= %f' % (mRmin,mRmax,rMin,rMax),'entrylist')
+    if options.scale_factor == 1:
+        tree.Draw('>>elist','PhotonPFCiC.sieie[1] > .0001 && PhotonPFCiC.sieie[0] > .0001 && PFMR  >= %f && PFMR <= %f && PFR >= %f && PFR <= %f' % (mRmin,mRmax,rMin,rMax),'entrylist')    
+    else:
+        tree.Draw('>>elist','PhotonPFCiC.sieie[1] > .0001 && PhotonPFCiC.sieie[0] > .0001 && PFMR  >= %f && PFMR <= %f && PFR >= %f && PFR <= %f &&iSamp==%i' % (mRmin,mRmax,rMin,rMax,options.samp),'entrylist')
+
     elist = rt.gDirectory.Get('elist')
     
     entry = -1;
@@ -42,9 +46,9 @@ def convertTree2Dataset(tree, outputFile, outputBox, config, box, min, max, scal
         #set the RooArgSet and save
         a = rt.RooArgSet(args)
         a.setRealValue('MR',tree.PFMR/scale_factor)
-        a.setRealValue('R',1.)
+        a.setRealValue('R', (rMin + rMax) / 2)
         a.setRealValue('nBtag', 0.)
-        a.setRealValue('Rsq',1.)
+        a.setRealValue('Rsq',((rMin + rMax) / 2)*((rMin + rMax) / 2))
         data.add(a)
     numEntries = data.numEntries()
     if min < 0: min = 0
@@ -52,8 +56,8 @@ def convertTree2Dataset(tree, outputFile, outputBox, config, box, min, max, scal
     
     rdata = data.reduce(rt.RooFit.EventRange(min,max))
 
-    output = rt.TFile.Open(outputFile+"_MR"+str(mRmin)+"_R"+str(rMin)+"_"+outputBox,'RECREATE')
-    print 'Writing',outputFile+"_MR"+str(mRmin)+"_R"+str(rMin)+"_"+outputBox
+    output = rt.TFile.Open(outputFile+"_MR"+str(mRmin)+"_R"+str(rMin)+"_"+str(rMax)+"_"+"Samp_"+str(options.samp)+"_"+outputBox,'RECREATE')
+    print 'Writing',outputFile+"_MR"+str(mRmin)+"_R"+str(rMin)+"_"+str(rMax)+"_"+outputBox
     rdata.Write()
     output.Close()
     
@@ -68,8 +72,10 @@ if __name__ == '__main__':
                   help="The last event to take from the input Dataset")
     parser.add_option('--min',dest="min",type="int",default=0,
                   help="The first event to take from the input Dataset")
-    parser.add_option('--scale',dest="scale_factor",type="int",default=1,
-                  help="Scale M_R by this amount i.e. GeV-->TeV use 1000")  
+    parser.add_option('--scale',dest="scale_factor",type="int",default=1000,
+                  help="Scale M_R by this amount i.e. GeV-->TeV use 1000")
+    parser.add_option('--sample',dest="samp",type="int",default=1,
+                      help="samp=1(fake) samp=0(tight)")  
     (options,args) = parser.parse_args()
 
 

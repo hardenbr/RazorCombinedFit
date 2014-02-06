@@ -31,7 +31,8 @@ class RazorPhotonBox(RazorBox.RazorBox):
         self.fixParsExact("MR0_%s" % flavour, False)
 #        self.fixParsExact("R0_%s" % flavour, False)
         self.fixParsExact("b_%s" % flavour, False)
-        self.fixParsExact("n_%s" % flavour, False)        
+        self.fixParsExact("n_%s" % flavour, False)
+#        self.fixParsExact("RI_%s" % flavour, False)        
 
     def float2ndComponent(self,flavour):
         self.fixParsExact("MR02nd_%s" % flavour, False)
@@ -152,8 +153,13 @@ class RazorPhotonBox(RazorBox.RazorBox):
         if data is None:
             data = RootTools.getDataSet(inputFile,'RMRTree', self.cut)
             data = data.reduce(rangeCut)
-        
+
+        #GENERATE 50 times the statistics in the form of toys
         toyData = self.workspace.pdf(self.fitmodel).generate(self.workspace.set('variables'), 50*data.numEntries())
+
+        print toyData
+        print ranges
+        
         toyData = toyData.reduce(self.getVarRangeCutNamed(ranges=ranges))
 
         xmin = min([self.workspace.var(xvarname).getMin(r) for r in ranges])
@@ -169,14 +175,15 @@ class RazorPhotonBox(RazorBox.RazorBox):
         mr_bins = bintuple[0]
         print mr_bins
         mr_array = array("d",mr_bins)
-        histoData = rt.TH1D("histoData", "histoData",len(mr_bins)-1,mr_array)
-        histoToy = rt.TH1D("histoToy", "histoToy",len(mr_bins)-1, mr_array)
 
-        #if xmin < 1: #THIS IS AN RSQ
-        #    histoData = rt.TH1D("histoData", "histoData",len(rsq_bins)-1,rsq_array)
-        #    histoToy = rt.TH1D("histoToy", "histoToy",len(rsq_bins)-1, rsq_array)
-        #else: #THIS IS AN MR HIST
+        
 
+        if xmin < .4: #THIS IS AN RSQ
+            histoData = rt.TH1D("histoData", "histoData",len(rsq_bins)-1,rsq_array)
+            histoToy = rt.TH1D("histoToy", "histoToy",len(rsq_bins)-1, rsq_array)
+        else: #THIS IS AN MR HIST
+            histoData = rt.TH1D("histoData", "histoData",len(mr_bins)-1,mr_array)
+            histoToy = rt.TH1D("histoToy", "histoToy",len(mr_bins)-1, mr_array)
 
         
         def setName(h, name):
@@ -208,7 +215,11 @@ class RazorPhotonBox(RazorBox.RazorBox):
         print "histData " + str(histoData.Integral())
         print "histToy " + str(histoToy.Integral())
         toyData.Print()
-        scaleFactor = histoData.Integral()/histoToy.Integral()
+        if histoToy.Integral() > 0:
+            scaleFactor = histoData.Integral()/histoToy.Integral()
+        else:
+            scaleFactor = 1
+            print "no toys! Integral = 0"        
 
         histoToy.Scale(scaleFactor)
         SetErrors(histoToy, nbins)
