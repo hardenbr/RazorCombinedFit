@@ -31,7 +31,7 @@ def convertTree2Dataset(tree, outputFile, outputBox, config, box, min, max, scal
 
     #iterate over selected entries in the input tree    
     if options.scale_factor == 1:
-        tree.Draw('>>elist','PhotonPFCiC.sieie[1] > .0001 && PhotonPFCiC.sieie[0] > .0001 && PFMR  >= %f && PFMR <= %f && PFR >= %f && PFR <= %f' % (mRmin,mRmax,rMin,rMax),'entrylist')    
+        tree.Draw('>>elist','PFMR  >= %f && PFMR <= %f && PFR >= %f && PFR <= %f' % (mRmin,mRmax,rMin,rMax),'entrylist')    
     else:
         tree.Draw('>>elist','PhotonPFCiC.sieie[1] > .0001 && PhotonPFCiC.sieie[0] > .0001 && PFMR  >= %f && PFMR <= %f && PFR >= %f && PFR <= %f &&iSamp==%i' % (mRmin,mRmax,rMin,rMax,options.samp),'entrylist')
 

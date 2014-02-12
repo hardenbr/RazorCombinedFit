@@ -6,6 +6,20 @@ import array, os
 #speed up the drawing by supressing x11
 rt.gROOT.SetBatch(True);
 
+def smallest_68(hist):
+    total_events = hist.Integral()
+    n_bins = hist.GetNbinsX()
+
+    sum = 0.0
+    for bin in range(n_bins):
+        count = hist.GetBinContent(bin+1)
+        sum += float(count)
+
+        if (sum / total_events) > .68:
+            return hist.GetBinCenter(bin+1)
+
+    return 0
+
 #exponentially increasing bin sizes
 def makebins(start_,end_,inc_,inc_inc_):
     bin = start_
@@ -19,7 +33,7 @@ def makebins(start_,end_,inc_,inc_inc_):
 
 random = rt.TRandom()
 
-bins = makebins(.4, 5., .1, .1)
+bins = makebins(.6, 5., .1, .3)
 
 parser = OptionParser()
 
@@ -37,10 +51,16 @@ parser.add_option("-t", "--toys", dest="n_toys",
                   default="100",
                   action="store",type="int")
 
-parser.add_option("-m", "--mix", dest="domix",
-                 help="do signal mix or not",
-                 default=False,
-                 action="store_true")
+parser.add_option("-m", "--mix", dest="mix_file",
+                 help="path to signal file to perform mix with",
+                 default="no_file",
+                 action="store",type="string")
+
+parser.add_option("-x", "--xsec", dest="xsec_file",
+                 help="file containing signal cross sections",
+                 default="no_xsec",
+                 action="store",type="string")
+
 
 parser.add_option("-p", "--print", dest="print_pdf",
                  help="print pdfs",
@@ -69,7 +89,7 @@ parser.add_option("-s", "--samp", dest="samp",
 
 parser.add_option("--mrmin", dest="mrmin",
                  help="minimum mr for the low rsq fit",
-                 default=.4,
+                 default=.6,
                  action="store",type="float")
 
 
@@ -77,9 +97,15 @@ parser.add_option("--mrmin", dest="mrmin",
 
 parser.print_help()
 
-data_file = rt.TFile(options.datafile,"READ")
+do_mix =  options.mix_file != "no_file"
+data_file = None
+
+if do_mix:
+    data_file = rt.TFile(options.mix_file,"READ")
+else:
+    data_file = rt.TFile(options.datafile,"READ")
+
 fit_file = rt.TFile(options.filename)
-do_mix = options.domix
 
 fr = fit_file.Get("Had/independentFR")
 fr.Print()
@@ -122,7 +148,7 @@ n_high_rsq = tree.GetEntries(high_cut)
 print "nlow: ", n_low_rsq
 print "nhigh: ", n_high_rsq
 
-b_high = b_low #* pow(r1,1/n)
+b_high = b_low #* pow(r1*r1,1/n)
 n_high = n
 M0_high = M0
 
@@ -201,27 +227,26 @@ def get_bin_errors(fr, norm):
         list = fr.randomizePars() 
 
         #extract parameters from the fit
-        MR_toy = list[0].getVal()
+        M0_toy = list[0].getVal()
         Ntot_toy = list[1].getVal()
         b_toy = list[2].getVal()
         n_toy = list[3].getVal()
 
         #cant be evaluated
 #        if n_toy > 80: continue
-
         
         #derive the high rsq region parameters
-        b_high_toy = b_toy #* pow(r1,1/n_toy)
+        b_high_toy = b_toy #* pow(r1*r1,1/n_toy)
         n_high_toy = n_toy
-        M0_high_toy = MR_toy
+        M0_high_toy = M0_toy
 
         if options.debug: print "b", b_high_toy, "n",n_high_toy
 
         #find the fit normalization
         if options.debug: print "\ndoing low integral.."
-        int_low = integral(r0,mr_min_low, mr_cutoff, b_toy, MR_toy, n_toy)
+        int_low = integral_fit(mr_min_low, mr_cutoff, b_toy, M0_toy, n_toy)
         if options.debug: print "\ndoing high integral.."
-        int_high = integral(r1,mr_min, mr_cutoff, b_high_toy, M0_high_toy, n_high_toy)
+        int_high = integral_fit(mr_min, mr_cutoff, b_high_toy, M0_high_toy, n_high_toy)
 
         if int_low ==0 or int_high == 0:continue
 
@@ -233,25 +258,23 @@ def get_bin_errors(fr, norm):
             m2 = bins[jj+1]
 
             #do the integral for the bin
-            high = integral(r1,m1, m2, b_high_toy, M0_high_toy, n_high_toy) * norm / int_high 
-            low = integral(r0,m1, m2, b_toy, MR_toy, n_toy) * Ntot_toy / int_low
-
-            low_list[jj].append(low)            
-            high_list[jj].append(high)
+            high = integral_fit(m1, m2, b_high_toy, M0_high_toy, n_high_toy) * norm / int_high 
+            low = integral_fit(m1, m2, b_toy, M0_toy, n_toy) * Ntot_toy / int_low
             
-            hists_low[jj].Fill(low)
+            pois_high = random.PoissonD(high)
+            pois_low = random.PoissonD(low)
 
-            pois_samp = random.PoissonD(high)
+            hists_low[jj].Fill(pois_low)
+            hists_high[jj].Fill(pois_high)
 
-            hists_high[jj].Fill(pois_samp)
+            low_list[jj].append(pois_low)            
+            high_list[jj].append(pois_high)
 
     return (low_list,high_list,hists_low,hists_high)
 
-
-
 if do_mix:
-    tree.Draw("PFMR>>hist_low_data","PFMR>%f&&PFR^2>%f && PFR^2 < %f && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min, r0, r1))
-    tree.Draw("PFMR>>hist_high_data","PFMR>%f&&PFR^2>%f && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min, r1))
+    tree.Draw("PFMR>>hist_low_data","PFMR>%f&&PFR^2>%f && PFR^2 < %f " % (mr_min, r0, r1))
+    tree.Draw("PFMR>>hist_high_data","PFMR>%f&&PFR^2>%f" % (mr_min, r1))
     tree.Draw("PFMR>>hist_signal","PFMR>%f&&PFR^2>%f&&!isFake" % (mr_min, r1))
     
 else:
@@ -286,14 +309,14 @@ for ii in range(len(bins) - 1):
 
     #normalization integrals
     if options.debug: print "doing low integral.."    
-    int_low = integral(r0,mr_min, mr_cutoff, b_low, M0, n)
+    int_low = integral_fit(mr_min, mr_cutoff, b_low, M0, n)
     if options.debug: print "doing high integral.."
-    int_high = integral(r1,mr_min, mr_cutoff, b_high, M0_high, n_high) 
+    int_high = integral_fit(mr_min, mr_cutoff, b_high, M0_high, n_high) 
     
     #fit integrals per bin
 
-    low = integral(r0,m1, m2, b_low, M0, n)         
-    high = integral(r1,m1, m2, b_high, M0_high, n_high) 
+    low = integral_fit(m1, m2, b_low, M0, n)         
+    high = integral_fit(m1, m2, b_high, M0_high, n_high) 
 
     #scaling
     low *= 1. / int_low * (n_low_rsq)
@@ -317,9 +340,12 @@ for ii in range(len(bins) - 1):
     high_func = fit_high_hist.GetFunction("gaus")
 
     low_error = high_error = 1
-
+    
     if fit_low_hist.Integral() > 0: low_error = low_func.GetParameter(2)
     if fit_high_hist.Integral() > 0: high_error = high_func.GetParameter(2)
+
+    if low_func.GetParameter(1) < 0: low_error = smallest_68(fit_low_hist)
+    if high_func.GetParameter(1) < 0: high_error = smallest_68(fit_high_hist)
 
     print "\t\t low_error: %f high_error: %f" % (low_error,high_error)
 
@@ -537,14 +563,22 @@ for ii in range(len(hists_high)):
 
     delta_text= rt.TPaveText(.125,1,.9,.9,"NDC");
 
-    delta = abs(gaus_mean - true_val) / gaus_sigma
+    delta = -9
+    if gaus_mean > 0 :
+        delta = abs(gaus_mean - true_val) / gaus_sigma
+    else:
+        delta = float(true_val) / float(smallest_68(hists_low[ii]))
 
     delta_text.SetTextFont(42);
-    delta_text.SetTextSize(0.06);
+    delta_text.SetTextSize(0.04);
     delta_text.SetFillColor(0); 
     delta_text.SetTextAlign(12);
-    delta_text.AddText("#Delta = (N data - #mu_{gaus}) / #sigma_{gaus} = %2.2f" % delta);   
-    delta_text.Draw("same");
+    if gaus_mean > 0:
+        delta_text.AddText("#Delta = (N data - #mu_{gaus}) / #sigma_{gaus} = (%2.0f - %2.0f) / %2.2f = %2.2f" % (max(gaus_mean,0),true_val, gaus_sigma,delta));
+    else:
+        delta_text.AddText("#Delta = N_{obs} /  (.68 range) = %2.2f" % delta)
+
+    delta_text.Draw("same")
     
     canvas.Write()
 
@@ -600,7 +634,6 @@ for ii in range(len(hists_low)):
     m1 = gaus_mean - error
     m2 = gaus_mean - 2 * error
     m3 = gaus_mean - 3 * error
-
 
     absmin = min([min_val, m3])
     absmax = max([max_val, max_val, p3])
@@ -691,14 +724,23 @@ for ii in range(len(hists_low)):
 
     print gaus_mean , true_val, gaus_sigma , "delta", delta
 
-    delta = abs(gaus_mean - true_val) / gaus_sigma
+    delta = -9
+    if gaus_mean > 0 :
+        delta = abs(gaus_mean - true_val) / gaus_sigma
+    else:
+        delta = float(true_val) / float(smallest_68(hists_low[ii]))
 
     delta_text.SetTextFont(42);
-    delta_text.SetTextSize(0.06);
+    delta_text.SetTextSize(0.04);
     delta_text.SetFillColor(0); 
     delta_text.SetTextAlign(12);
-    delta_text.AddText("#Delta = (N data - #mu_{gaus}) / #sigma_{gaus} = %2.2f" % delta);   
-    delta_text.Draw("same");
+    if gaus_mean > 0:
+        delta_text.AddText("#Delta = (N data - #mu_{gaus}) / #sigma_{gaus} = (%2.0f - %2.0f) / %2.2f = %2.2f" % (max(gaus_mean,0),true_val, gaus_sigma,delta));
+    else:
+
+        delta_text.AddText("#Delta = N_{obs} /  (.68 range) = %2.2f" % delta)
+
+    delta_text.Draw("same")
     
     canvas.Write()
 

@@ -8,3 +8,8 @@ python fit_extrap.py -d /afs/cern.ch/work/h/hardenbr/2013/RAZOR_DIPHOTON/DATA/20
 python fit_extrap.py -d /afs/cern.ch/work/h/hardenbr/2013/RAZOR_DIPHOTON/DATA/2012ABCD_FULL_Jan22.root -f ~/2013/RAZOR_DIPHOTON/CMSSW_6_1_1/src/RazorCombinedFit/razor_output.root -t 10000
 
 
+EGLOOSE SELECTION
+
+python fit_extrap.py -d /afs/cern.ch/work/h/hardenbr/2014/RAZOR_DIPHOTON/DATA/2012ABCD_selected_FULL.root -f ../razor_output.root -t 10000
+
+
