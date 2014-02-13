@@ -2,9 +2,101 @@ from  optparse  import OptionParser
 import ROOT as rt
 import RootTools
 import array, os
+import random
 
 #speed up the drawing by supressing x11
 rt.gROOT.SetBatch(True);
+
+def get_xsec(xsec_file, msq, mgl):
+
+    file = open(xsec_file,"r")
+    lines = file.readlines()
+    lines_stripped = map(lambda(x):x.rstrip("\n"),lines)
+
+    #scan the lines
+    for line in lines:
+        if msq in line and mgl in line:
+            #check the ordering is correct
+            split = line.split()
+            idx1 =  split.index(msq)
+            idx2 =  split.index(mgl)
+            if idx1 < idx2:
+                #parse the values
+                lo_xsec = float(split[6])
+                lo_xsec_plus = float(split[8])
+                lo_xsec_minus = float(split[10])
+
+                return (lo_xsec,lo_xsec_plus,lo_xsec_minus)
+            
+    print "\n\nERROR:CROSS SECTION WAS NOT FOUND\n\n"
+    return (-1,-1,-1)
+
+#generates a randomized signal sample based on the cross section file, signal
+#strength, and signal file
+def build_mixed_model(signal_file, xsec_file, mu, mr_min, rsq_min, outfile):
+
+    mr_min = mr_min*1000
+    
+    signal_name = signal_file.split("/")[-1]
+    msq = signal_name.split("_")[1]
+    mgl = signal_name.split("_")[2]    
+
+    (xsec,xsec_plus,xsec_minus) = get_xsec(xsec_file, msq, mgl)
+
+    signal = rt.TFile(signal_file)
+    signal_tree = signal.Get("HggOutput")
+    
+    eff = signal_tree.GetEntries("PFMR > %f & PFR^2 > %f" % (mr_min, rsq_min)) / 10000.
+
+    #calculate the number of signal events expected
+    n_events = int(eff * (xsec * 1000) * 20 * mu)
+    n_events_plus = int(eff * ((xsec+xsec_plus) * 1000) * 20 * mu)    
+    n_events_minus = int(eff * ((xsec-xsec_minus) * 1000) * 20 * mu)
+
+    #make the iteration list for signal
+    signal_tree.Draw(">>iterlist","","entrylist")
+    itlist = rt.gDirectory.Get("iterlist")
+
+    signal_mr_rsq = []
+    #make a list of all the values for that file
+    for event in range(signal_tree.GetEntries()):
+        if event % 5000 == 0: print "scanning signal point....", event
+        entry = itlist.Next()        
+        signal_tree.GetEntry(entry)
+
+        if signal_tree.PFMR > 0:
+            signal_mr_rsq.append((signal_tree.PFMR,signal_tree.PFR))
+
+    #randomize the entries
+    random.shuffle(signal_mr_rsq)
+
+    #output variables
+    rt.gROOT.ProcessLine("struct myStruct{\
+    Float_t PFMR;\
+    Float_t PFR;\
+    };")
+
+    outfile = rt.TFile(outfile,"RECREATE")
+    s = rt.myStruct()
+
+    #generate the output tree
+    outTree = rt.TTree("HggOutput","HggOutput")
+    outTree.Branch("PFMR",rt.AddressOf(s,"PFMR"),"PFMR/F")
+    outTree.Branch("PFR",rt.AddressOf(s,"PFR"),"PFR/F")
+
+    print "Filling result signal..."
+
+    #fill the tree
+    for ii in signal_mr_rsq[:n_events]:
+        print ii[0],ii[1]*ii[1]
+        s.PFMR = float(ii[0])/ 1000.
+        s.PFR = float(ii[1])
+        outTree.Fill()
+
+    outTree.Write()
+    outfile.Close()
+    
+    return (eff,n_events, n_events_plus, n_events_minus)
 
 def smallest_68(hist):
     total_events = hist.Integral()
@@ -31,7 +123,7 @@ def makebins(start_,end_,inc_,inc_inc_):
         inc*=(1+inc_inc_)
     return list
 
-random = rt.TRandom()
+trandom = rt.TRandom()
 
 bins = makebins(.6, 5., .1, .3)
 
@@ -53,6 +145,11 @@ parser.add_option("-t", "--toys", dest="n_toys",
 
 parser.add_option("-m", "--mix", dest="mix_file",
                  help="path to signal file to perform mix with",
+                 default="no_file",
+                 action="store",type="string")
+
+parser.add_option("--outmix", dest="out_mix_file",
+                 help="path to where mixed signal file will be placed",
                  default="no_file",
                  action="store",type="string")
 
@@ -92,34 +189,16 @@ parser.add_option("--mrmin", dest="mrmin",
                  default=.6,
                  action="store",type="float")
 
+parser.add_option("--mu", dest="mu",
+                 help="if mix is being performed include value of mu being scanned",
+                 default=1.0,
+                 action="store",type="float")
 
 (options, args) = parser.parse_args()
 
 parser.print_help()
 
-do_mix =  options.mix_file != "no_file"
-data_file = None
-
-if do_mix:
-    data_file = rt.TFile(options.mix_file,"READ")
-else:
-    data_file = rt.TFile(options.datafile,"READ")
-
-fit_file = rt.TFile(options.filename)
-
-fr = fit_file.Get("Had/independentFR")
-fr.Print()
-fr_list = fr.floatParsFinal()
-    
-b_low = fr_list[2].getVal()#9.63 #* 1 /( pow(r0, 1/n))# + pow(r1, 1/n))
-n = fr_list[3].getVal()#58.291
-M0 = fr_list[0].getVal()#-.3477                                                                     
-
-tree = data_file.Get("HggOutput")
-hist_signal = rt.TH1F("hist_signal","Signal",len(bins)-1,array.array("d",bins))
-hist_low_rsq_data = rt.TH1F("hist_low_data","Low Rsq Data",len(bins)-1,array.array("d",bins))
-hist_high_rsq_data = rt.TH1F("hist_high_data","High Rsq Data",len(bins)-1,array.array("d",bins))
-#hist_high_pred = rt.TH1F("hist_high_pred","High Rsq Pred",len(bins)-1,array.array("d",bins))
+#FIRST SET THE BOUNDS IN MR AND RSQ
 
 mr_min_low = options.mrmin
 mr_min = bins[0]
@@ -132,18 +211,56 @@ r1_cut = .02
 r0 = r0_cut - options.ri
 r1 = r1_cut - options.ri
 
-low_cut = "(PFMR/1000.)>%f && PFR^2 > %f && PFR^2 < %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min,r0_cut, r1_cut,options.samp)
-high_cut = "(PFMR/1000.)>%f && PFR^2 > %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min,r1_cut,options.samp)
+#IF WE ARE GENREATING A MIX OPEN THAT FILE FIRST AND MAKE IT
+do_mix =  options.mix_file != "no_file"
+tree_signal = None
+if do_mix:
+    (eff,ns_events, ns_events_plus, ns_events_minus) = build_mixed_model(options.mix_file, options.xsec_file, options.mu, mr_min, r0_cut, options.out_mix_file)
+    mix_file_output = rt.TFile(options.out_mix_file,"READ")
+    tree_signal = mix_file_output.Get("HggOutput")
+
+#NOW OPEN THE FILES WE WILL USE TO THROW TOYS
+
+print "DATAFILE NAME", options.datafile
+data_file = rt.TFile(options.datafile,"READ")
+
+#OPEN THE FIT FILE OUTPUT LAST
+fit_file = rt.TFile(options.filename)
+
+fr = fit_file.Get("Had/independentFR")
+fr.Print()
+fr_list = fr.floatParsFinal()
+    
+b_low = fr_list[2].getVal()#9.63 #* 1 /( pow(r0, 1/n))# + pow(r1, 1/n))
+n = fr_list[3].getVal()#58.291
+M0 = fr_list[0].getVal()#-.3477
+
+
+tree = data_file.Get("HggOutput")
+print "TREE CHECK: ", tree.GetEntries()
+
+
+#hist_high_pred = rt.TH1F("hist_high_pred","High Rsq Pred",len(bins)-1,array.array("d",bins))
+hist_signal = rt.TH1F("hist_signal","Signal",len(bins)-1,array.array("d",bins))
+hist_low_rsq_data = rt.TH1F("hist_low_data","Low Rsq Data",len(bins)-1,array.array("d",bins))
+hist_high_rsq_data = rt.TH1F("hist_high_data","High Rsq Data",len(bins)-1,array.array("d",bins))
+hist_high_rsq_signal = rt.TH1F("hist_high_signal","High Rsq Signal",len(bins)-1,array.array("d",bins))
+
+low_cut_data = "(PFMR/1000.)>%f && PFR^2 > %f && PFR^2 < %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min,r0_cut, r1_cut,options.samp)
+high_cut_data = "(PFMR/1000.)>%f && PFR^2 > %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min,r1_cut,options.samp)
+
+low_cut_signal = "(PFMR)>%f && PFR^2 > %f && PFR^2 < %f " % (mr_min,r0_cut, r1_cut)
+high_cut_signal = "(PFMR)>%f && PFR^2 > %f" % (mr_min,r1_cut)
+
+print low_cut_data
+print high_cut_data
+
+n_low_rsq = tree.GetEntries(low_cut_data)
+n_high_rsq = tree.GetEntries(high_cut_data)
 
 if do_mix:
-    low_cut = "(PFMR)>%f && PFR^2 > %f && PFR^2 < %f " % (mr_min,r0_cut, r1_cut)
-    high_cut = "(PFMR)>%f && PFR^2 > %f" % (mr_min,r1_cut)
-
-print low_cut
-print high_cut
-
-n_low_rsq = tree.GetEntries(low_cut)
-n_high_rsq = tree.GetEntries(high_cut)
+    n_low_rsq += tree_signal.GetEntries(low_cut_signal)
+    n_high_rsq += tree_signal.GetEntries(high_cut_signal)
 
 print "nlow: ", n_low_rsq
 print "nhigh: ", n_high_rsq
@@ -159,7 +276,7 @@ def Gamma(a,x):
     return val
 
 def Gfun(m,r,b,n):
-    val =  n/pow(b*n,n)*(Gamma(n,b*n*pow(m*r,1/n))*pow(10,200))
+    val =  n/pow(b*n,n)*(Gamma(n,b*n*pow(m*r,1/n)))
     if options.debug: print "gfun", val
     return val
 
@@ -261,8 +378,8 @@ def get_bin_errors(fr, norm):
             high = integral_fit(m1, m2, b_high_toy, M0_high_toy, n_high_toy) * norm / int_high 
             low = integral_fit(m1, m2, b_toy, M0_toy, n_toy) * Ntot_toy / int_low
             
-            pois_high = random.PoissonD(high)
-            pois_low = random.PoissonD(low)
+            pois_high = trandom.PoissonD(high)
+            pois_low = trandom.PoissonD(low)
 
             hists_low[jj].Fill(pois_low)
             hists_high[jj].Fill(pois_high)
@@ -272,14 +389,15 @@ def get_bin_errors(fr, norm):
 
     return (low_list,high_list,hists_low,hists_high)
 
+tree.Draw("PFMR/1000>>hist_low_data",low_cut_data)
+tree.Draw("PFMR/1000>>hist_high_data",high_cut_data)
+
 if do_mix:
-    tree.Draw("PFMR>>hist_low_data","PFMR>%f&&PFR^2>%f && PFR^2 < %f " % (mr_min, r0, r1))
-    tree.Draw("PFMR>>hist_high_data","PFMR>%f&&PFR^2>%f" % (mr_min, r1))
-    tree.Draw("PFMR>>hist_signal","PFMR>%f&&PFR^2>%f&&!isFake" % (mr_min, r1))
-    
-else:
-    tree.Draw("PFMR/1000>>hist_low_data","PFMR>%f&&PFR^2>%f && PFR^2 < %f&&iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min, r0, r1, options.samp))
-    tree.Draw("PFMR/1000>>hist_high_data","PFMR>%f&&PFR^2>%f&&iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min, r1,options.samp))
+    tree_signal.Draw("PFMR>>hist_signal",high_cut_signal)
+    #add the signal to the high rsq events
+    tree_signal.Draw("PFMR>>+hist_high_data",high_cut_signal)
+
+
 
 file = rt.TFile("weight_hist.root","RECREATE")
     
@@ -289,6 +407,8 @@ hist_ratio = rt.TH1F("hist_ratio","Ratio",len(bins)-1,array.array("d",bins))
 hist_difference = rt.TH1F("hist_difference","Difference %",len(bins)-1,array.array("d",bins))
 
 n_high_rsq_data = hist_high_rsq_data.Integral()
+
+print "N_HIGH_RSQ_DATA", n_high_rsq_data
 
 #get the errors
 (low_list, high_list, hists_low, hists_high) = get_bin_errors(fr, n_high_rsq_data)

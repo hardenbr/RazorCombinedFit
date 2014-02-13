@@ -26,7 +26,7 @@ def get_xsec(xsec_file, msq, mgl):
     print "\n\nERROR:CROSS SECTION WAS NOT FOUND\n\n"
     return (-1,-1,-1)
 
-def build_mixed_model(data_file, signal_file, xsec_file, mu, mr_min, rsq_min, outfile):
+def build_mixed_model(signal_file, xsec_file, mu, mr_min, rsq_min, outfile):
 
     mr_min = mr_min*1000
     
@@ -38,8 +38,6 @@ def build_mixed_model(data_file, signal_file, xsec_file, mu, mr_min, rsq_min, ou
 
     signal = rt.TFile(signal_file)
     signal_tree = signal.Get("HggOutput")
-    data = rt.TFile(data_file)
-    data_tree = data.Get("HggOutput")
     
     eff = signal_tree.GetEntries("PFMR > %f & PFR^2 > %f" % (mr_min, rsq_min)) / 10000.
 
@@ -60,33 +58,14 @@ def build_mixed_model(data_file, signal_file, xsec_file, mu, mr_min, rsq_min, ou
         signal_tree.GetEntry(entry)
         signal_mr_rsq.append((signal_tree.PFMR,signal_tree.PFR))
 
-    #do the same for data
-    data_cut = "iSamp==1 && PFMR > %f && PFR^2 > %f" % (mr_min,rsq_min)
-    data_tree.Draw(">>iterlist2", data_cut ,"entrylist")
-    itlist_data = rt.gDirectory.Get("iterlist2")
-
-    data_mr_rsq = []
-
-    #make a list of all the values forthe fake
-    n_data = data_tree.GetEntries(data_cut) 
-    print "total data events...", n_data
-    for event in range(n_data):
-        if event % 100 == 0: print "scanning datapoint....", event
-        entry = itlist_data.Next()
-        data_tree.GetEntry(entry)
-        data_mr_rsq.append((data_tree.PFMR,data_tree.PFR))
-
+    #randomize the entries
     random.shuffle(signal_mr_rsq)
-
-
 
     #output variables
     rt.gROOT.ProcessLine("struct myStruct{\
     Float_t PFMR;\
     Float_t PFR;\
-    Int_t isFake;\
     };")
-
 
     outfile = rt.TFile(outfile,"RECREATE")
     s = rt.myStruct()
@@ -95,7 +74,6 @@ def build_mixed_model(data_file, signal_file, xsec_file, mu, mr_min, rsq_min, ou
     outTree = rt.TTree("HggOutput","HggOutput")
     outTree.Branch("PFMR",rt.AddressOf(s,"PFMR"),"PFMR/F")
     outTree.Branch("PFR",rt.AddressOf(s,"PFR"),"PFR/F")
-    outTree.Branch("isFake",rt.AddressOf(s,"isFake"),"isFake/I")
 
     print "Filling result signal..."
 
@@ -103,30 +81,19 @@ def build_mixed_model(data_file, signal_file, xsec_file, mu, mr_min, rsq_min, ou
         print ii
         s.PFMR = float(ii[0])/ 1000.
         s.PFR = float(ii[1])
-        s.isFake = 0
         outTree.Fill()
-
-    print "Filling result data..."
-    for ii in data_mr_rsq:
-        s.PFMR = ii[0]
-        s.PFR = ii[1]
-        s.isFake = 1
-
-        if s.PFMR > mr_min and s.PFR*s.PFR > rsq_min:
-            s.PFMR = s.PFMR / 1000.
-            outTree.Fill()            
 
     outTree.Write()
     outfile.Close()
     
-    return (n_events, n_events_plus, n_events_minus)
+    return (eff,n_events, n_events_plus, n_events_minus)
     
         
 xsec = "Spectra_gsq_B_8TeV.xsec"
 signal = "/afs/cern.ch/work/h/hardenbr/2014/RAZOR_DIPHOTON/MC/SIGNAL/selected_1400_1820_375.root"
 dataset = "/afs/cern.ch/work/h/hardenbr/2014/RAZOR_DIPHOTON/DATA/2012ABCD_selected_FULL.root"
 mu = 1
-(n_events, n_events_plus, n_events_minus) = build_mixed_model(dataset, signal, xsec, mu, .6, .01,"test.root")
+(eff, n_events, n_events_plus, n_events_minus) = build_mixed_model(signal, xsec, mu, .6, .01,"test.root")
 
-print "nevents: %f nevents_plus: %f nevents_minus %f" % (n_events, n_events_plus, n_events_minus)
+print "eff: %f nevents: %f nevents_plus: %f nevents_minus %f" % (eff, n_events, n_events_plus, n_events_minus)
 
