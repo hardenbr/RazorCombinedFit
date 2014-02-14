@@ -3,8 +3,11 @@ import ROOT as rt
 import RootTools
 import array, os
 import random
+import rootlogon
 rt.gROOT.SetBatch(True);
 DO_DEBUG = False
+
+rootlogon.style()
 
 def smallest_68(hist):
     total_events = hist.Integral()
@@ -307,7 +310,7 @@ def build_tgraph_errors(mu, bin_result):
         mid_points.append(mid)
 
         delta_points.append(delta)
-        delta_p_points.append(delta_p - delta)
+        delta_p_points.append(abs(delta_p - delta))
         delta_m_points.append(abs(delta - delta_m))
         zeros.append(0)
         
@@ -327,7 +330,7 @@ trandom = rt.TRandom()
 
 bins = makebins(.6, 5., .1, .3)
 
-mu_scan = [.01,.3,.5,1,2]
+mu_scan = [0, .5, 1, 2]
 
 parser = OptionParser()
 
@@ -536,14 +539,47 @@ for pair in mu_signal_pairs:
     mu_output_tuples.append((mu, bin_results))
 
 final_output = rt.TFile("tgraph_scan.root", "RECREATE")
+
+graphs = []
+
+tmultigraph = rt.TMultiGraph("total_graph","total")
+
 for result in mu_output_tuples:
     mu_res = result[0]
     bin_res = result[1]
-
+    
+    canvas = rt.TCanvas("canvas_%.2f" % mu_res)
     graph = build_tgraph_errors(mu_res, bin_res)
 
+    xaxis = graph.GetXaxis()
+    yaxis = graph.GetYaxis()
+
+    xaxis.SetTitle("M_{R} Bin Center [TeV]")
+    yaxis.SetTitle("#Delta = (N_{exp} - N_{obs}) / #sigma_{exp}")
+    graph.SetMarkerStyle(21)
+    graph.SetMarkerColor(rt.kBlack)
+    graph.Draw("ALP")
+
+    
+    canvas.Write()
     graph.Write()
 
+    graphs.append(graph)
+
+canvas_tot = rt.TCanvas("canvas_total")
+#draw the first
+
+#draw the rest
+for graph in graphs: tmultigraph.Add(graph)
+tmultigraph.Draw("ALP")
+
+#xaxis = tmultigraph.GetXaxis()
+#yaxis = tmultigraph.GetYaxis()
+#xaxis.SetTitle("M_{R} Bin Center [TeV]")
+#yaxis.SetTitle("#Delta = (N_{exp} - N_{obs}) / #sigma_{exp}")
+
+tmultigraph.Write()
+canvas_tot.Write()
 final_output.Close()
 
 
