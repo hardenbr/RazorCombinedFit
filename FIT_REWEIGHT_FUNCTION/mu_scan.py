@@ -261,7 +261,7 @@ def assign_values_from_fit(hist_low_rsq, hist_high_rsq, toy_hists_low, toy_hists
         low *= 1. / int_low * (n_low_rsq)
         high *= 1. / int_high * (n_high_rsq)
 
-        print "bin: (%f,%f) low: %f high: %f" % (m1, m2, low, high)
+        #        print "bin: (%f,%f) low: %f high: %f" % (m1, m2, low, high)
 
         #fill the histograms
         hist_low_rsq.SetBinContent(ii+1,low)    
@@ -335,7 +335,6 @@ def average_bins_for_given_mu_results(common_mu_result):
 
     #go through each result and split them by window
     for ii in common_mu_result:
-        print "ii in common mu result:", ii
         window = (ii[0],ii[1])
         index = bin_windows.index(window)
         windows[index].append(ii)
@@ -362,12 +361,6 @@ def average_bins_for_given_mu_results(common_mu_result):
         bin_averaged.append((avg_bl, avg_br, avg_delta, avg_delta_p, avg_delta_m))
 
     return bin_averaged
-        
-
-    
-        
-
-
 
 trandom = rt.TRandom()
 
@@ -436,7 +429,7 @@ r1 = r1_cut
 mu_signal_pairs = []
 file_num = 0
 for mu in mu_scan:
-    print "Scanning mu %f....." % mu
+    print "Scanning mu %f, file number: %i" % (mu, file_num)
 
     #generate one file per signal scanned containing the histogram
     name = options.out_mix_file.rstrip(".root")+"mu_%f_%i.root" % (mu,file_num)
@@ -507,6 +500,8 @@ mu_output_tuples = []
 #loop over the values of mu
 for pair in mu_signal_pairs:    
 
+    print "\n\n\n PERFORMING MU SCAN # %i" % mu_signal_pairs.index(pair)
+
     #extract the signal mu info
     (mu, ns_events, ns_events_plus, ns_events_minus) = pair[0]
 
@@ -521,8 +516,8 @@ for pair in mu_signal_pairs:
     (low_list, high_list, hists_low, hists_high) = get_bin_errors(fr, n_high_rsq_data)
     
     #fit the toy histograms    
-    for ii in hists_high: ii.Fit("gaus")
-    for ii in hists_low: ii.Fit("gaus")
+    for ii in hists_high: ii.Fit("gaus","q")
+    for ii in hists_low: ii.Fit("gaus","q")
     
     #use the fit + toys to determine the errors and values in the two regions
     (hist_low_rsq, hist_high_rsq) = assign_values_from_fit(hist_low_rsq, hist_high_rsq, hists_low, hists_high)    
