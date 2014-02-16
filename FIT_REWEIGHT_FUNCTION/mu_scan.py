@@ -326,11 +326,59 @@ def build_tgraph_errors(mu, bin_result):
 
     return graph
 
+def average_bins_for_given_mu_results(common_mu_result):
+
+    windows = []
+    bin_averaged = []
+    #build a blank array for each window
+    for ii in bin_windows: windows.append([])
+
+    #go through each result and split them by window
+    for ii in common_mu_result:
+        print "ii in common mu result:", ii
+        window = (ii[0],ii[1])
+        index = bin_windows.index(window)
+        windows[index].append(ii)
+
+    for ww in windows:
+        
+        avg_bl = 0
+        avg_br = 0
+        avg_delta = 0
+        avg_delta_p = 0
+        avg_delta_m = 0
+        
+        for toy in ww:
+            avg_bl = toy[0]
+            avg_br = toy[1]
+            avg_delta += toy[2]
+            avg_delta_p += toy[3]
+            avg_delta_m += toy[4]
+
+        avg_delta = avg_delta / len(ww)
+        avg_delta_p = avg_delta_p / len(ww)
+        avg_delta_m = avg_delta_m / len(ww)
+
+        bin_averaged.append((avg_bl, avg_br, avg_delta, avg_delta_p, avg_delta_m))
+
+    return bin_averaged
+        
+
+    
+        
+
+
+
 trandom = rt.TRandom()
 
-bins = makebins(.6, 5., .1, .3)
+bins = makebins(.6, 5., .1, .1)
 
-mu_scan = [1]*50
+bin_windows = []
+
+#build a list of windows
+for bb in range(len(bins)-1): bin_windows.append((bins[bb],bins[bb+1]))
+
+mu_scan = [0] + [1] * 100 + [.5] * 100 + [2] * 100
 
 parser = OptionParser()
 
@@ -543,53 +591,57 @@ for pair in mu_signal_pairs:
 final_output = rt.TFile("tgraph_scan.root", "RECREATE")
 
 graphs = []
-
 tmultigraph = rt.TMultiGraph("total_graph","total")
 
 #perfrom an average of repeated mu values
 zipped_mu = zip(*mu_output_tuples)
+#parse the mus and bin_results
 mus = zipped_mu[0]
 bin_res = zipped_mu[1]
 
+print "BIN RES AFTER ZIP:", bin_res
+print "BIN REST ELEMENT 0:", bin_res[0]
+print "MUS AFTER ZIP:", mus
+#checked mu values
 mu_checked = []
-mu_and_average_list = []
+
+averaged_result = None
+average_result_list = []
 for ii in range(len(mus)):
     mu = mus[ii]
-    common_bin_results = []
+    averaged_result = None
+
 
     #if there is a repeated
     if mus.count(mu) > 1 and mu not in mu_checked:
+        print "Found repeated mu value....", mu, " with ", mus.count(mu), " occurances"
+
         #add it to the checked list
         mu_checked.append(mu)
 
+        common_mu_results = []
         #check every element of the list and keep the bin results
-        for jj in mus: if mu == jj: common_bin_results.append(bin_res[jj])                
+        for jj in mus:
+            if mu == jj:
+                for indv_bin in bin_res[mus.index(jj)]:
+                    common_mu_results.append(indv_bin)
 
-        #zip the bin results together
-        zipped_bin_avg = zip(*common_bin_results)
-
-        #parse out the lists
-        bin_l = zipped_bin_avg[0][0] 
-        bin_r = zipped_bin_avg[1][0]
         
-        delta = zipped_bin_avg[2]
-        delta_p = zipped_bin_avg[3]
-        delta_m = zipped_bin_avg[4]
-
-        #average the lists
-        avg_delta = reduce(lambda x,y: float(x+y), delta) / len(delta)
-        avg_delta_p = reduce(lambda x,y: float(x+y), delta_p) / len(delta)
-        avg_delta_m = reduce(lambda x,y: float(x+y), delta_m) / len(delta)
-
-        averaged_result = (bin_l, bin_r, avg_delta, avg_delta_p, avg_deltam)
-
-        mu_and_average_list.append((mu,averaged_result))
+        averaged_result = average_bins_for_given_mu_results(common_mu_results)
+                
     #no repeated values    
-    else:
+    elif mu not in mu_checked:
         averaged_result = bin_res[ii]    
+    else:
+        continue
     
-    canvas = rt.TCanvas("averaged_canvas_%.2f" % mu_res)
-    graph = build_tgraph_errors(mu_res, averaged_result)
+    average_result_list.append((mu,averaged_result, mus.count(mu)))
+
+for result in average_result_list:
+    (mu,averaged_result, counts) = result
+    
+    canvas = rt.TCanvas("averaged_canvas_%.2f_npoints_%i" % (mu, counts))
+    graph = build_tgraph_errors(mu, averaged_result)
 
     xaxis = graph.GetXaxis()
     yaxis = graph.GetYaxis()
