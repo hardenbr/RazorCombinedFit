@@ -99,7 +99,7 @@ def get_xsec(xsec_file, msq, mgl):
 
 #generates a randomized signal sample based on the cross section file, signal
 #strength, and signal file
-def build_mixed_model(signal_file, xsec_file, mu, mr_min, rsq_min, outfile):
+def build_mixed_model(signal_file, xsec_file, mu, mr_min, rsq_min, outfile_name):
 
     mr_min = mr_min*1000
     
@@ -142,7 +142,7 @@ def build_mixed_model(signal_file, xsec_file, mu, mr_min, rsq_min, outfile):
     Float_t PFR;\
     };")
 
-    outfile = rt.TFile(outfile,"RECREATE")
+    outfile = rt.TFile(outfile_name,"RECREATE")
     s = rt.myStruct()
 
     #generate the output tree
@@ -330,7 +330,7 @@ trandom = rt.TRandom()
 
 bins = makebins(.6, 5., .1, .3)
 
-mu_scan = [0, .5, 1, 2]
+mu_scan = [1]*50
 
 parser = OptionParser()
 
@@ -386,16 +386,19 @@ r1 = r1_cut
 
 #BUILD THE MIX MODELS (AND CORR. FILE)
 mu_signal_pairs = []
-
+file_num = 0
 for mu in mu_scan:
     print "Scanning mu %f....." % mu
 
     #generate one file per signal scanned containing the histogram
-    name = options.out_mix_file.rstrip(".root")+"mu_%f.root" % mu
+    name = options.out_mix_file.rstrip(".root")+"mu_%f_%i.root" % (mu,file_num)
     (eff,ns_events, ns_events_plus, ns_events_minus) = build_mixed_model(options.mix_file, options.xsec_file, mu, mr_min, r0_cut, name)
 
-    mu_info = (mu,ns_events,ns_events_plus,ns_events_minus)    
+    mu_info = (mu, ns_events, ns_events_plus, ns_events_minus)    
     mu_signal_pairs.append((mu_info,name))
+
+    #increment file number
+    file_num +=1
     
 #NOW OPEN THE FILES WE WILL USE TO THROW TOYS
 print "DATAFILE NAME", options.datafile
@@ -474,8 +477,7 @@ for pair in mu_signal_pairs:
     for ii in hists_low: ii.Fit("gaus")
     
     #use the fit + toys to determine the errors and values in the two regions
-    (hist_low_rsq, hist_high_rsq) = assign_values_from_fit(hist_low_rsq, hist_high_rsq, hists_low, hists_high)
-    
+    (hist_low_rsq, hist_high_rsq) = assign_values_from_fit(hist_low_rsq, hist_high_rsq, hists_low, hists_high)    
     
     #loop over the bins in the high rsq_hist
     nbins = hist_high_rsq.GetNbinsX()
@@ -544,12 +546,50 @@ graphs = []
 
 tmultigraph = rt.TMultiGraph("total_graph","total")
 
-for result in mu_output_tuples:
-    mu_res = result[0]
-    bin_res = result[1]
+#perfrom an average of repeated mu values
+zipped_mu = zip(*mu_output_tuples)
+mus = zipped_mu[0]
+bin_res = zipped_mu[1]
+
+mu_checked = []
+mu_and_average_list = []
+for ii in range(len(mus)):
+    mu = mus[ii]
+    common_bin_results = []
+
+    #if there is a repeated
+    if mus.count(mu) > 1 and mu not in mu_checked:
+        #add it to the checked list
+        mu_checked.append(mu)
+
+        #check every element of the list and keep the bin results
+        for jj in mus: if mu == jj: common_bin_results.append(bin_res[jj])                
+
+        #zip the bin results together
+        zipped_bin_avg = zip(*common_bin_results)
+
+        #parse out the lists
+        bin_l = zipped_bin_avg[0][0] 
+        bin_r = zipped_bin_avg[1][0]
+        
+        delta = zipped_bin_avg[2]
+        delta_p = zipped_bin_avg[3]
+        delta_m = zipped_bin_avg[4]
+
+        #average the lists
+        avg_delta = reduce(lambda x,y: float(x+y), delta) / len(delta)
+        avg_delta_p = reduce(lambda x,y: float(x+y), delta_p) / len(delta)
+        avg_delta_m = reduce(lambda x,y: float(x+y), delta_m) / len(delta)
+
+        averaged_result = (bin_l, bin_r, avg_delta, avg_delta_p, avg_deltam)
+
+        mu_and_average_list.append((mu,averaged_result))
+    #no repeated values    
+    else:
+        averaged_result = bin_res[ii]    
     
-    canvas = rt.TCanvas("canvas_%.2f" % mu_res)
-    graph = build_tgraph_errors(mu_res, bin_res)
+    canvas = rt.TCanvas("averaged_canvas_%.2f" % mu_res)
+    graph = build_tgraph_errors(mu_res, averaged_result)
 
     xaxis = graph.GetXaxis()
     yaxis = graph.GetYaxis()
@@ -559,12 +599,11 @@ for result in mu_output_tuples:
     graph.SetMarkerStyle(21)
     graph.SetMarkerColor(rt.kBlack)
     graph.Draw("ALP")
-
     
     canvas.Write()
     graph.Write()
 
-    graphs.append(graph)
+    graphs.append(graph)    
 
 canvas_tot = rt.TCanvas("canvas_total")
 #draw the first

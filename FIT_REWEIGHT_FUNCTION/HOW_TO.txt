@@ -13,3 +13,7 @@ EGLOOSE SELECTION
 python fit_extrap.py -d /afs/cern.ch/work/h/hardenbr/2014/RAZOR_DIPHOTON/DATA/2012ABCD_selected_FULL.root -f ../razor_output.root -t 10000
 
 python fit_extrap.py -x Spectra_gsq_B_8TeV.xsec -t 10000 -m /afs/cern.ch/work/h/hardenbr/2014/RAZOR_DIPHOTON/MC/SIGNAL/selected_1400_1820_375.root --mu 1 --outmix 1400_1820_377_mu1_mix.root -d /afs/cern.ch/work/h/hardenbr/2014/RAZOR_DIPHOTON/DATA/2012ABCD_selected_FULL.root -f ../razor_output_samp1.root --samp 1
+
+MU SCAN
+
+python mu_scan.py -f ../razor_output_samp1.root -d /afs/cern.ch/work/h/hardenbr/2014/RAZOR_DIPHOTON/DATA/2012ABCD_selected_FULL.root -m /afs/cern.ch/work/h/hardenbr/2014/RAZOR_DIPHOTON/MC/SIGNAL/selected_1400_1820_375.root --outmix parsed_signal.root -x Spectra_gsq_B_8TeV.xsec -t 5000
