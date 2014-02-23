@@ -281,7 +281,7 @@ def assign_values_from_fit(hist_low_rsq, hist_high_rsq, toy_hists_low, toy_hists
         if low_func.GetParameter(1) < 0: low_error = smallest_68(fit_low_hist)
         if high_func.GetParameter(1) < 0: high_error = smallest_68(fit_high_hist)
         
-        print "\t\t low_error: %f high_error: %f" % (low_error,high_error)
+        #        print "\t\t low_error: %f high_error: %f" % (low_error,high_error)
         
         hist_low_rsq.SetBinError(ii+1, low_error)
         hist_high_rsq.SetBinError(ii+1, high_error)
@@ -304,7 +304,7 @@ def build_tgraph_errors(mu, bin_result):
         delta_p = result[3]
         delta_m = result[4]
         
-        mid  = (bin_r - bin_l) / 2.0
+        mid  = (bin_r + bin_l) / 2.0
 
         #append all the values
         mid_points.append(mid)
@@ -322,7 +322,7 @@ def build_tgraph_errors(mu, bin_result):
 
     #build tehg raph
     graph = rt.TGraphAsymmErrors(len(mid_points), mid_points_ar, delta_points_ar, zeros_ar, zeros_ar, delta_m_points_ar, delta_p_points_ar)
-    graph.SetTitle("MuScan_%f" % mu)
+    graph.SetTitle("#mu = %.2f" % mu)
 
     return graph
 
@@ -364,14 +364,18 @@ def average_bins_for_given_mu_results(common_mu_result):
 
 trandom = rt.TRandom()
 
-bins = makebins(.6, 5., .1, .1)
+bins = makebins(.6, 5., .1, .3)
+
+print "USING BINS:", bins
 
 bin_windows = []
 
 #build a list of windows
 for bb in range(len(bins)-1): bin_windows.append((bins[bb],bins[bb+1]))
 
-mu_scan = [0] + [1] * 100 + [.5] * 100 + [2] * 100
+mu_scan = [0] + [.5] * 100 + [1]*100 + [2]*100
+
+#mu_scan = [0] + [.5] + [1] + [2]
 
 parser = OptionParser()
 
@@ -500,12 +504,12 @@ mu_output_tuples = []
 #loop over the values of mu
 for pair in mu_signal_pairs:    
 
-    print "\n\n\n PERFORMING MU SCAN # %i" % mu_signal_pairs.index(pair)
+    print "\n\n\n PERFORMING MU SCAN # %i / %i" % (mu_signal_pairs.index(pair), len(mu_signal_pairs))
 
     #extract the signal mu info
     (mu, ns_events, ns_events_plus, ns_events_minus) = pair[0]
-
     name_signal  = pair[1]
+    
     signal_file = rt.TFile(name_signal,"READ")
     tree_signal = signal_file.Get("HggOutput")
 
@@ -655,14 +659,34 @@ for result in average_result_list:
 canvas_tot = rt.TCanvas("canvas_total")
 #draw the first
 
+colors = [rt.kBlack, rt.kRed+1, rt.kBlue, rt.kGreen+3, rt.kMagenta+1, rt.kCyan, rt.kOrange]
 #draw the rest
-for graph in graphs: tmultigraph.Add(graph)
+for graph in graphs:
+    color = colors[graphs.index(graph)]
+    graph.SetLineColor(color)
+    graph.SetLineWidth(2)
+    graph.SetFillColor(0)
+    graph.SetMarkerColor(color)
+    tmultigraph.Add(graph)
+
+#parse the title and xsec again
+signal_name = options.mix_file.split("/")[-1]
+msq = signal_name.split("_")[1]
+mgl = signal_name.split("_")[2]   
+(xsec,xsec_plus,xsec_minus) = get_xsec(options.xsec_file, msq, mgl)
+title = "Signal Injection m_{sq} = %i GeV m_{gl} = %i GeV m_{#tilde{#chi}} = 375 GeV #sigma_{LO} = %2.2f fb" % (int(msq), int(mgl), float(xsec)*1000)
+
+tmultigraph.SetTitle(title)
 tmultigraph.Draw("ALP")
 
-#xaxis = tmultigraph.GetXaxis()
-#yaxis = tmultigraph.GetYaxis()
-#xaxis.SetTitle("M_{R} Bin Center [TeV]")
-#yaxis.SetTitle("#Delta = (N_{exp} - N_{obs}) / #sigma_{exp}")
+leg = canvas_tot.BuildLegend()
+leg.SetFillColor(0)
+canvas_tot.SetGridy(1)
+xaxis = tmultigraph.GetXaxis()
+yaxis = tmultigraph.GetYaxis()
+xaxis.SetTitle("M_{R} Bin Center [TeV]")
+yaxis.SetTitle("#Delta = (N_{exp} - N_{obs}) / #sigma_{exp}")
+
 
 tmultigraph.Write()
 canvas_tot.Write()

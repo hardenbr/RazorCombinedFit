@@ -265,7 +265,7 @@ if do_mix:
 print "nlow: ", n_low_rsq
 print "nhigh: ", n_high_rsq
 
-b_high = b_low #* pow(r1*r1,1/n)
+b_high = b_low #*pow(r1,1/n)
 n_high = n
 M0_high = M0
 
@@ -353,7 +353,7 @@ def get_bin_errors(fr, norm):
 #        if n_toy > 80: continue
         
         #derive the high rsq region parameters
-        b_high_toy = b_toy #* pow(r1*r1,1/n_toy)
+        b_high_toy = b_toy #* pow(r1,1/n_toy)
         n_high_toy = n_toy
         M0_high_toy = M0_toy
 
