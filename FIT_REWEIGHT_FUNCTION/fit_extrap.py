@@ -125,7 +125,6 @@ def makebins(start_,end_,inc_,inc_inc_):
 
 trandom = rt.TRandom()
 
-bins = makebins(.6, 5., .1, .3)
 
 parser = OptionParser()
 
@@ -189,6 +188,16 @@ parser.add_option("--mrmin", dest="mrmin",
                  default=.6,
                  action="store",type="float")
 
+parser.add_option("--rsq1", dest="rsq1",
+                 help="minimum rsq for the low rsq fit",
+                 default=.01,
+                 action="store",type="float")
+
+parser.add_option("--rsq2", dest="rsq2",
+                 help="max rsq for the low rsq fit",
+                 default=.02,
+                 action="store",type="float")
+
 parser.add_option("--mu", dest="mu",
                  help="if mix is being performed include value of mu being scanned",
                  default=1.0,
@@ -199,17 +208,18 @@ parser.add_option("--mu", dest="mu",
 parser.print_help()
 
 #FIRST SET THE BOUNDS IN MR AND RSQ
-
 mr_min_low = options.mrmin
 mr_min = bins[0]
 mr_cutoff = 5
 rsq_cutoff = 5
 
-r0_cut = .01
-r1_cut = .02
+r0_cut = options.rsq1
+r1_cut = options.rsq2 
 
 r0 = r0_cut - options.ri
 r1 = r1_cut - options.ri
+
+bins = makebins(mr_min, 5., .1, .3)
 
 #IF WE ARE GENREATING A MIX OPEN THAT FILE FIRST AND MAKE IT
 do_mix =  options.mix_file != "no_file"
@@ -854,11 +864,11 @@ for ii in range(len(hists_low)):
     delta_text.SetTextSize(0.04);
     delta_text.SetFillColor(0); 
     delta_text.SetTextAlign(12);
+
     if gaus_mean > 0:
         delta_text.AddText("#Delta = (N data - #mu_{gaus}) / #sigma_{gaus} = (%2.0f - %2.0f) / %2.2f = %2.2f" % (max(gaus_mean,0),true_val, gaus_sigma,delta));
     else:
-
-        delta_text.AddText("#Delta = N_{obs} /  (.68 range) = %2.2f" % delta)
+        delta_text.AddText("#Delta = N_{obs} /  (.68 containment window) = %2.2f" % delta)
 
     delta_text.Draw("same")
     
