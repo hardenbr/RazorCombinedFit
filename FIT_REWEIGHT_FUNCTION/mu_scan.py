@@ -339,8 +339,7 @@ def average_bins_for_given_mu_results(common_mu_result):
         index = bin_windows.index(window)
         windows[index].append(ii)
 
-    for ww in windows:
-        
+    for ww in windows:        
         avg_bl = 0
         avg_br = 0
         avg_delta = 0

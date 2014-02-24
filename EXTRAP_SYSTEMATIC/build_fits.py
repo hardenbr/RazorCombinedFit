@@ -6,9 +6,14 @@ from  optparse  import OptionParser
 rt.gROOT.SetBatch(True)
 
 mr_max = 7
-(m0_min, m0_max) = (-.4,0)
-(n_min, n_max) = (3,200)
-(b_min, b_max) = (3,150)
+# working initial fit params feb-24-2014
+#(m0_0, m0_min, m0_max) = (0,-.3,0)
+#(n_0, n_min, n_max) = (6, 1., 150)
+#(b_0, b_min, b_max) = (8, 3, 100)
+
+(m0_0, m0_min, m0_max) = (0,-.3,0)
+(n_0, n_min, n_max) = (6, 1., 150)
+(b_0, b_min, b_max) = (8, 3, 100)
 
 def make_cfg(filename, mr_min, rsq_min, rsq_max, n_tot):
     outfile = open(filename,"w")
@@ -17,7 +22,7 @@ def make_cfg(filename, mr_min, rsq_min, rsq_max, n_tot):
     outfile.write("variables = ['MR[%f, %f, %f]', 'Rsq[%f, %f, %f]', 'nBtag[%i,%i,%i]'] \n" % variables_tuple)
     variables_range_tuple = (mr_min, mr_max, rsq_min, rsq_max, 0,0,4)
     outfile.write("variables_range = ['MR_FULL[%f, %f]','Rsq_FULL[%f, %f]','nBtag_FULL[%i,%i,%i]']\n" % variables_range_tuple)
-    outfile.write("pdf_QCD = ['MR0_QCD[%f,%f,%f]','R0_QCD[1, 0, 1.5]','R1_QCD[.0,0,1]','b_QCD[%f,%f,%f]','RI_QCD[.000,0,.003]','n_QCD[%f, %f, %f]']\n" % (m0_min+.00001,m0_min,m0_max, b_min+.001, b_min, b_max, n_min+.0001, n_min, n_max))
+    outfile.write("pdf_QCD = ['MR0_QCD[%f,%f,%f]','R0_QCD[1, 0, 1.5]','R1_QCD[.0,0,1]','b_QCD[%f,%f,%f]','RI_QCD[.000,0,.003]','n_QCD[%f, %f, %f]']\n" % (m0_0,m0_min,m0_max, b_0, b_min, b_max, n_0, n_min, n_max))
     outfile.write("others_QCD = ['Lumi[4980]','Ntot_QCD[%f,%f,%f]']\n" % (n_tot/2., 0, n_tot*1.2))
     outfile.close()
 
@@ -35,8 +40,12 @@ parser.add_option("-s", "--sig", dest="sig",
                                     action="store",type="string")
 
 parser.add_option("-d", "--roodata", dest="roodata",
-                                    help="folder containing roodatasets",
-                                    action="store_true",default=False)
+                  help="folder containing roodatasets",
+                  action="store",default=None, type="string")
+
+parser.add_option("--iSamp", dest="iSamp",
+                  help="sample to use",
+                  action="store",default=1, type="int")
 
 
 
@@ -65,7 +74,7 @@ width_rsq_ar = numpy.array(low_rsq_width)
 grid = list(itertools.product(mr_ar, low_rsq_ar, width_rsq_ar))
 config_names  = []
 
-grid = grid
+grid = grid[:86]
 
 #build a config for each of the points
 results = []
@@ -76,8 +85,21 @@ for point in grid:
     (mr_min, rsq_min, rsq_width) = point
     rsq_max = rsq_min + rsq_width
 
-    n_events_low = tree.GetEntries("PhotonPFCiC.sieie[1] > .0001 && PhotonPFCiC.sieie[0] > .0001 && PFMR > %f && PFR^2 > %f && PFR^2 < %f && iSamp == 1" % (mr_min * 1000., rsq_min, rsq_max))
-    n_events_high = tree.GetEntries("PhotonPFCiC.sieie[1] > .0001 && PhotonPFCiC.sieie[0] > .0001 && PFMR > %f && PFR^2 > %f  && iSamp == 1" % (mr_min * 1000., rsq_max))
+    if options.roodata != None:
+        #get a list of all the fit files in the dataset directory
+        path = options.roodata
+        files = os.listdir(path)
+        #get a list of all of the config files
+        for file in files:
+            if "mr%.1f_rsq%.4f_rsqw%.4f_rooDat_Had.root" % (mr_min, rsq_min, rsq_width) in file:
+                path = options.cfg_loc
+                name = path + "/" + "config_mr%.1f_rsq%.4f_rsqw%.4f.cfg" % point
+                make_cfg(name, mr_min, rsq_min, rsq_max, 10000)                
+                config_names.append(name)
+        continue
+
+    n_events_low = tree.GetEntries("PhotonPFCiC.sieie[1] > .0001 && PhotonPFCiC.sieie[0] > .0001 && PFMR > %f && PFR^2 > %f && PFR^2 < %f && iSamp == %i" % (mr_min * 1000., rsq_min, rsq_max, options.iSamp))
+    n_events_high = tree.GetEntries("PhotonPFCiC.sieie[1] > .0001 && PhotonPFCiC.sieie[0] > .0001 && PFMR > %f && PFR^2 > %f  && iSamp == %i" % (mr_min * 1000., rsq_max, options.iSamp))
     n_events_low_sig = sig_tree.GetEntries("PFMR > %f && PFR^2 > %f && PFR^2 < %f && iSamp == 0" % (mr_min * 1000., rsq_min, rsq_max))
     n_events_high_sig = sig_tree.GetEntries("PFMR > %f && PFR^2 > %f  && iSamp == 0" % (mr_min * 1000., rsq_max))
     n_events_sig_total = sig_tree.GetEntries("iSamp==0 && PFMR>0")
@@ -103,26 +125,17 @@ for point in grid:
         config_names.append(name)
         result = (mr_min, rsq_min, rsq_width, n_events_high, n_events_low, n_events_sig_total, n_events_low_sig, n_events_high_sig, perc_contam, perc_efficient)
         results.append(result)
-#get a list of all the fit files in the dataset directory
-#path_elem = ((options.filename).split("/"))[:-1]
-#path = ""
-#for elem in path_elem: path+= elem + "/"
-#files = os.listdir(path)
-#converted_files = []
-#get a list of all of the converted files
-#for file in files:
-#    if "MR" in file and "Had" in file:
-#        print "Appending....", path+"/"+file
-#        converted_files.append(path+"/"+file)
+
+
+        
     
 
 
 #use each config to convert the dataset to a roodataset
 for name in config_names:
-    if options.roodata: break #if roodata has already be generated dont convert the datasets
-    
+    if options.roodata != None: break #if roodata has already be generated dont convert the datasets    
     outdata = name[:-4] + "_rooDat_Had.root"    
-    cmd = "python Josh2Dataset.py -c %s -o %s  %s" % (name, outdata, options.filename)
+    cmd = "python Josh2Dataset.py -c %s -o %s --samp %i %s" % (name, outdata, options.iSamp, options.filename)
     print "Converting dataset....", config_names.index(name) + 1, " of ", len(config_names)
     print cmd
     os.system(cmd)
@@ -146,6 +159,11 @@ for config in config_names:
     norm_val = fr_list[1].getVal()
     m0_val = fr_list[0].getVal()
 
+    b_error = fr_list[2].getError()
+    n_error = fr_list[3].getError()
+    norm_error = fr_list[1].getError()
+    m0_error = fr_list[0].getError()
+
     bdiff = min(b_val - b_min, b_max - b_val ) / b_val
     ndiff = min(n_val - n_min, n_max - n_val ) / n_val
     m0diff = min(m0_val - m0_min, m0_max - m0_val) / m0_val
@@ -157,7 +175,7 @@ for config in config_names:
     if abs(m0diff) < .05:
         warnings.append( "\t\t\t WARNING m0 PRAM  NEAR LIMIT " + config)
 
-    fit_result = (norm_val, m0_val, n_val, b_val)
+    fit_result = (norm_val, m0_val, m0_error, n_val, n_error,  b_val, b_error,  config)
 
     fit_results.append(fit_result)
 
@@ -174,9 +192,10 @@ for result in results:
     print "\n"
 
 #print the parameters of the fit
-print "norm\tm0\tn\tb"
+print "norm\t\tm0\tm0_e\tn\tn_e\tb\tb_e"
 for param in fit_results:
-    for val in param: print "%2.2f\t" % val,
+    print param[-1]
+    for val in param[:-1]: print "%2.3f\t" % val,
     print "\n"
 
 #print the warnings
