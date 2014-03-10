@@ -11,9 +11,9 @@ mr_max = 7
 #(n_0, n_min, n_max) = (6, 1., 150)
 #(b_0, b_min, b_max) = (8, 3, 100)
 
-(m0_0, m0_min, m0_max) = (0,-.3,0)
-(n_0, n_min, n_max) = (6, 1., 150)
-(b_0, b_min, b_max) = (8, 3, 100)
+(m0_0, m0_min, m0_max) = (-.4,-1,0)
+(n_0, n_min, n_max) = (3, 1.2, 100)
+(b_0, b_min, b_max) = (7, 1, 100)
 
 def make_cfg(filename, mr_min, rsq_min, rsq_max, n_tot):
     outfile = open(filename,"w")
@@ -23,7 +23,7 @@ def make_cfg(filename, mr_min, rsq_min, rsq_max, n_tot):
     variables_range_tuple = (mr_min, mr_max, rsq_min, rsq_max, 0,0,4)
     outfile.write("variables_range = ['MR_FULL[%f, %f]','Rsq_FULL[%f, %f]','nBtag_FULL[%i,%i,%i]']\n" % variables_range_tuple)
     outfile.write("pdf_QCD = ['MR0_QCD[%f,%f,%f]','R0_QCD[1, 0, 1.5]','R1_QCD[.0,0,1]','b_QCD[%f,%f,%f]','RI_QCD[.000,0,.003]','n_QCD[%f, %f, %f]']\n" % (m0_0,m0_min,m0_max, b_0, b_min, b_max, n_0, n_min, n_max))
-    outfile.write("others_QCD = ['Lumi[4980]','Ntot_QCD[%f,%f,%f]']\n" % (n_tot/2., 0, n_tot*1.2))
+    outfile.write("others_QCD = ['Lumi[4980]','Ntot_QCD[%f,%f,%f]']\n" % (n_tot/2., 0, n_tot*2))
     outfile.close()
 
 parser = OptionParser()
@@ -40,7 +40,7 @@ parser.add_option("-s", "--sig", dest="sig",
                                     action="store",type="string")
 
 parser.add_option("-d", "--roodata", dest="roodata",
-                  help="folder containing roodatasets",
+                  help="folder containing roodatasets. If this is specified the datasets will not be build, only configs.",
                   action="store",default=None, type="string")
 
 parser.add_option("--iSamp", dest="iSamp",
@@ -166,7 +166,11 @@ for config in config_names:
 
     bdiff = min(b_val - b_min, b_max - b_val ) / b_val
     ndiff = min(n_val - n_min, n_max - n_val ) / n_val
-    m0diff = min(m0_val - m0_min, m0_max - m0_val) / m0_val
+    m0diff = 0
+    if m0_val != 0:
+        m0diff = min(m0_val - m0_min, m0_max - m0_val) / m0_val
+    else:
+        m0diff = min(m0_val - m0_min, m0_max - m0_val) 
 
     if abs(bdiff) < .05:
         warnings.append("\t\t\t WARNING B PARAM NEAR LIMIT "  + config)

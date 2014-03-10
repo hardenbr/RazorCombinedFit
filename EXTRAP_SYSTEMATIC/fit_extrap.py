@@ -4,8 +4,278 @@ import RootTools
 import array, os
 import random
 
+class error_summary:
+    left_vals = []
+    right_vals = []
+    nobs = []
+    nexp = []
+    delta = []
+
+class toy_distribution:
+    left_68 = -1.
+    right_68 = -1.
+    nexp = -1.
+    nobs = -1.
+    delta = -1.
+
+def build68graph(nobs, x, r_x, l_x, bins, name):
+    width = []
+    y = [0] * len(x)
+    
+    # get the width sizes
+    for ii in range(len(bins)-1):
+        w = bins[ii+1] - bins[ii]
+        if w < 0: print "ERROR: BINS MUST BE INCREASING WIDTH"
+        width.append(w/2.0)
+    #last width is just the size of the previous width
+    #width.append((x[-1] - x[-2]) / 2.0)
+
+    ex_up = []
+    ex_down = []
+    obs_val = []
+
+
+    for ii in range(len(x)):
+
+        win_size = (r_x[ii] - l_x[ii])
+
+        print r_x[ii], l_x[ii]
+        print "win_size", win_size
+        if win_size == 0: win_size = 1
+        ex_up.append( (r_x[ii] - x[ii]) / win_size)
+        ex_down.append( (x[ii] - l_x[ii]) / win_size)
+        obs_val.append(-(nobs[ii] - x[ii]) / win_size)
+        delta = (nobs[ii] - x[ii]) / win_size
+        
+    print "win_size", win_size
+    print "ex_up", ex_up
+    print "ex_down", ex_down
+    print "obs_val", obs_val
+    print "delta", delta
+
+
+    bins_ar = array.array("f",bins)
+    x_ar = array.array("f", x)
+    y_ar = array.array("f", y)
+    ey_u_ar = array.array("f", ex_up)
+    ey_d_ar = array.array("f", ex_down)
+    width_ar = array.array("f", width)
+    obs_val_ar = array.array("f", obs_val) 
+    
+    mg = rt.TMultiGraph(name,name)
+    
+    gr = rt.TGraphAsymmErrors(len(x),  bins_ar, y_ar, width_ar, width_ar, ey_u_ar, ey_d_ar)
+    gr.SetLineColor(rt.kBlack)
+    gr.SetLineWidth(2)
+    gr.SetFillColor(rt.kBlue+2)
+    gr.SetFillStyle(3002)
+    
+    gr2 = rt.TGraphAsymmErrors(len(x),  bins_ar, obs_val_ar, y_ar, y_ar, y_ar,y_ar)
+    gr2.SetMarkerStyle(20)
+    gr2.SetMarkerSize(1.4)
+    
+    mg.Add(gr)
+    mg.Add(gr2)
+
+    mg.SetTitle(name)
+    
+    return mg
+
+    
+def collapse_toys(dist):
+    left_vals = []
+    right_vals = []
+    nobs = []
+    nexp = []
+    delta = []
+
+    for ii in dist:
+        left_vals.append(ii.left_68)
+        right_vals.append(ii.right_68)
+        nobs.append(ii.nobs)
+        nexp.append(ii.nexp)
+        delta.append(ii.delta)
+
+    error_sum = error_summary()
+
+    error_sum.left_vals = left_vals
+    error_sum.right_vals = right_vals
+    error_sum.nobs = nobs
+    error_sum.nexp = nexp
+    error_sum.delta = delta
+
+    return error_sum
+
+
+#exponentially increasing bin sizes
+def makebins(start_,end_,inc_,inc_inc_):
+    bin = start_
+    inc = inc_
+    list = []
+    while bin < end_:
+        list.append(bin)
+        bin+=inc
+        inc*= (1+inc_inc_)
+    return list
+
+
 #speed up the drawing by supressing x11
 rt.gROOT.SetBatch(True);
+
+trandom = rt.TRandom()
+
+
+parser = OptionParser()
+
+parser.add_option("-f", "--file", dest="filename",
+                  help="fit.root file name to analyze FILE",
+                  default="razor_output.root",
+                  action="store",type="string")
+
+parser.add_option("-d","--data",dest="datafile",
+                  help="HggOutput.root data file to use",
+                  action="store",type="string")
+
+parser.add_option("-t", "--toys", dest="n_toys",
+                  help="Number of Toys to Throw",
+                  default="100",
+                  action="store",type="int")
+
+parser.add_option("-m", "--mix", dest="mix_file",
+                 help="path to signal file to perform mix with",
+                 default="no_file",
+                 action="store",type="string")
+
+parser.add_option("--outmix", dest="out_mix_file",
+                 help="path to where mixed signal file will be placed",
+                 default="no_file",
+                 action="store",type="string")
+
+parser.add_option("-x", "--xsec", dest="xsec_file",
+                 help="file containing signal cross sections",
+                 default="no_xsec",
+                 action="store",type="string")
+
+
+parser.add_option("-p", "--print", dest="print_pdf",
+                 help="print pdfs",
+                 default=False,
+                 action="store_true")
+
+parser.add_option("-n", "--nodraw", dest="draw",
+                 help="dont draw the result",
+                 default=False,
+                 action="store_true")
+
+parser.add_option("-e", "--debug", dest="debug",
+                 help="debug",
+                 default=False,
+                 action="store_true")
+
+parser.add_option("-r", "--rioff", dest="ri",
+                 help="offset for Rsq",
+                 default=0.0,
+                 action="store",type="float")
+
+parser.add_option("-s", "--samp", dest="samp",
+                 help="Sample Selection",
+                 default=1,
+                 action="store",type="int")
+
+parser.add_option("--mrmin", dest="mrmin",
+                 help="minimum mr for the low rsq fit",
+                 default=.6,
+                 action="store",type="float")
+
+parser.add_option("--rsq1", dest="rsq1",
+                 help="minimum rsq for the low rsq fit",
+                 default=.01,
+                 action="store",type="float")
+
+parser.add_option("--rsq2", dest="rsq2",
+                 help="max rsq for the low rsq fit",
+                 default=.02,
+                 action="store",type="float")
+
+parser.add_option("--mu", dest="mu",
+                 help="if mix is being performed include value of mu being scanned",
+                 default=1.0,
+                 action="store",type="float")
+
+(options, args) = parser.parse_args()
+
+parser.print_help()
+
+#FIRST SET THE BOUNDS IN MR AND RSQ
+mr_min_low = options.mrmin
+mr_min = mr_min_low
+
+
+r0_cut = options.rsq1
+r1_cut = options.rsq2 
+
+r0 = r0_cut - options.ri
+r1 = r1_cut - options.ri
+
+bins = makebins(mr_min, 2.5,.1,.1)
+
+mr_cutoff = bins[-1]
+rsq_cutoff = 5
+
+def lowest_filled_bin(hist):
+    bin = 1
+    while True:
+        if hist.GetBinContent(bin) != 0:
+            return bin
+        bin += 1
+
+def highest_filled_bin(hist):
+    bin = hist.GetNbinsX()    
+    while True:
+        if hist.GetBinContent(bin) != 0: return bin        
+        bin -= 1
+
+def get_smallest68_hist(exp, hist):
+    width_left = 1
+    width_right = 0
+
+    total_events = hist.Integral()
+
+    low_bin = lowest_filled_bin(hist)
+    high_bin = highest_filled_bin(hist)
+    exp_bin = hist.GetXaxis().FindBin(exp)#hist.GetMaximumBin()###
+
+#    print low_bin, high_bin, exp_bin
+    
+    while True:
+        left_edge = exp_bin - width_left
+        right_edge = exp_bin + width_right
+
+#        print "width_left, width_right", width_left, width_right
+#        print "left,right", left_edge, right_edge
+        if left_edge < 0 : left_edge = 0            
+        if right_edge > high_bin: right_edge = high_bin
+                
+        #if exp_bin not in xrange(left_edge, right_edge): continue            
+        integral = float(hist.Integral(left_edge, right_edge))
+        containment = integral / total_events
+
+        if containment > .68:
+            left_val = hist.GetBinLowEdge(left_edge)
+            right_val = hist.GetBinLowEdge(right_edge)
+
+            return (float(right_val - left_val) / 2., left_val, right_val)
+
+        move_left = hist.Integral(left_edge - 2, left_edge) 
+        move_right = hist.Integral(right_edge, right_edge + 2)
+
+#        print move_left, move_right
+        
+        if move_left > move_right :
+            width_left += 1
+        else:
+            width_right += 1
+
 
 def get_xsec(xsec_file, msq, mgl):
 
@@ -112,114 +382,7 @@ def smallest_68(hist):
 
     return 0
 
-#exponentially increasing bin sizes
-def makebins(start_,end_,inc_,inc_inc_):
-    bin = start_
-    inc = inc_
-    list = []
-    while bin < end_:
-        list.append(bin)
-        bin+=inc
-        inc*=(1+inc_inc_)
-    return list
 
-trandom = rt.TRandom()
-
-
-parser = OptionParser()
-
-parser.add_option("-f", "--file", dest="filename",
-                  help="fit.root file name to analyze FILE",
-                  default="razor_output.root",
-                  action="store",type="string")
-
-parser.add_option("-d","--data",dest="datafile",
-                  help="HggOutput.root data file to use",
-                  action="store",type="string")
-
-parser.add_option("-t", "--toys", dest="n_toys",
-                  help="Number of Toys to Throw",
-                  default="100",
-                  action="store",type="int")
-
-parser.add_option("-m", "--mix", dest="mix_file",
-                 help="path to signal file to perform mix with",
-                 default="no_file",
-                 action="store",type="string")
-
-parser.add_option("--outmix", dest="out_mix_file",
-                 help="path to where mixed signal file will be placed",
-                 default="no_file",
-                 action="store",type="string")
-
-parser.add_option("-x", "--xsec", dest="xsec_file",
-                 help="file containing signal cross sections",
-                 default="no_xsec",
-                 action="store",type="string")
-
-
-parser.add_option("-p", "--print", dest="print_pdf",
-                 help="print pdfs",
-                 default=False,
-                 action="store_true")
-
-parser.add_option("-n", "--nodraw", dest="draw",
-                 help="dont draw the result",
-                 default=False,
-                 action="store_true")
-
-parser.add_option("-e", "--debug", dest="debug",
-                 help="debug",
-                 default=False,
-                 action="store_true")
-
-parser.add_option("-r", "--rioff", dest="ri",
-                 help="offset for Rsq",
-                 default=0.0,
-                 action="store",type="float")
-
-parser.add_option("-s", "--samp", dest="samp",
-                 help="Sample Selection",
-                 default=1,
-                 action="store",type="int")
-
-parser.add_option("--mrmin", dest="mrmin",
-                 help="minimum mr for the low rsq fit",
-                 default=.6,
-                 action="store",type="float")
-
-parser.add_option("--rsq1", dest="rsq1",
-                 help="minimum rsq for the low rsq fit",
-                 default=.01,
-                 action="store",type="float")
-
-parser.add_option("--rsq2", dest="rsq2",
-                 help="max rsq for the low rsq fit",
-                 default=.02,
-                 action="store",type="float")
-
-parser.add_option("--mu", dest="mu",
-                 help="if mix is being performed include value of mu being scanned",
-                 default=1.0,
-                 action="store",type="float")
-
-(options, args) = parser.parse_args()
-
-parser.print_help()
-
-#FIRST SET THE BOUNDS IN MR AND RSQ
-mr_min_low = options.mrmin
-mr_min = mr_min_low
-mr_cutoff = 5
-rsq_cutoff = 5
-
-r0_cut = options.rsq1
-r1_cut = options.rsq2 
-
-r0 = r0_cut - options.ri
-r1 = r1_cut - options.ri
-
-bins = makebins(mr_min, 5., .1, .3)
 
 #IF WE ARE GENREATING A MIX OPEN THAT FILE FIRST AND MAKE IT
 do_mix =  options.mix_file != "no_file"
@@ -255,6 +418,7 @@ hist_signal = rt.TH1F("hist_signal","Signal",len(bins)-1,array.array("d",bins))
 hist_low_rsq_data = rt.TH1F("hist_low_data","Low Rsq Data",len(bins)-1,array.array("d",bins))
 hist_high_rsq_data = rt.TH1F("hist_high_data","High Rsq Data",len(bins)-1,array.array("d",bins))
 hist_high_rsq_signal = rt.TH1F("hist_high_signal","High Rsq Signal",len(bins)-1,array.array("d",bins))
+
 
 low_cut_data = "(PFMR/1000.)>%f && PFR^2 > %f && PFR^2 < %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min,r0_cut, r1_cut,options.samp)
 high_cut_data = "(PFMR/1000.)>%f && PFR^2 > %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min,r1_cut,options.samp)
@@ -337,8 +501,8 @@ def get_bin_errors(fr, norm):
         name_low = "low_bin%i" % ii
 
         if ii < 4:
-            hist_high = rt.TH1D(name_high,name_high, 1000,0,10000)
-            hist_low = rt.TH1D(name_low,name_low, 1000,0,10000)
+            hist_high = rt.TH1D(name_high,name_high, 5000,0,10000)
+            hist_low = rt.TH1D(name_low,name_low, 50000,0,100000)
         else:
             hist_high = rt.TH1D(name_high,name_high, 100,0,100)
             hist_low = rt.TH1D(name_low,name_low, 10000,0,10000)
@@ -360,7 +524,7 @@ def get_bin_errors(fr, norm):
         n_toy = list[3].getVal()
 
         #cant be evaluated
-        if n_toy > 80: continue
+#        if n_toy > 95: continue
         
         #derive the high rsq region parameters
         b_high_toy = b_toy #* pow(r1,1/n_toy)
@@ -390,6 +554,7 @@ def get_bin_errors(fr, norm):
             
             pois_high = trandom.PoissonD(high)
             pois_low = trandom.PoissonD(low)
+
 
             hists_low[jj].Fill(pois_low)
             hists_high[jj].Fill(pois_high)
@@ -422,13 +587,12 @@ print "N_HIGH_RSQ_DATA", n_high_rsq_data
 
 #get the errors
 (low_list, high_list, hists_low, hists_high) = get_bin_errors(fr, n_high_rsq_data)
-(low_errors, high_errors) = get_sigma(low_list,high_list)
+#(low_errors, high_errors) = get_sigma(low_list,high_list)
 
 #fit the histograms
 for ii in hists_low:    
     print "\n",ii
     ii.Fit("gaus","q")    
-    print ii.GetFunction("gaus")
 for ii in hists_high:
     ii.Fit("gaus","q")
 
@@ -471,18 +635,18 @@ for ii in range(len(bins) - 1):
 
     low_error = high_error = 1
     
-    if fit_low_hist.Integral() > 0: low_error = low_func.GetParameter(2)
-    if fit_high_hist.Integral() > 0: high_error = high_func.GetParameter(2)
+    if fit_low_hist.Integral() > 0:
+        low_error = get_smallest68_hist(low,fit_low_hist)[0]
+    if fit_high_hist.Integral() > 0:
+        high_error = get_smallest68_hist(high,fit_high_hist)[0]        
 
-    if low_func.GetParameter(1) < 0: low_error = smallest_68(fit_low_hist)
-    if high_func.GetParameter(1) < 0: high_error = smallest_68(fit_high_hist)
+    if low < 3: low_error = smallest_68(fit_low_hist)
+    if high < 3: high_error = smallest_68(fit_high_hist)
 
     print "\t\t low_error: %f high_error: %f" % (low_error,high_error)
 
     hist_low_rsq.SetBinError(ii+1, low_error)
     hist_high_rsq.SetBinError(ii+1, high_error)
-
-
                      
 #clone the low rsq
 hist_ratio = hist_low_rsq.Clone("hist_ratio")
@@ -493,18 +657,12 @@ hist_difference = hist_high_rsq_data.Clone("hist_difference")
 #there are no errors on the number of observed data
 for ii in range(len(bins)-1):
     hist_difference.SetBinError(ii+1,0)
-
-#Set the errors of the ratios
-#hist_ratio.Sumw2()
-#hist_high_pred.Sumw2()
-
-#hist_high_rsq.Sumw2()
-#hist_low_rsq.Sumw2()
+    hist_high_rsq_data.SetBinError(ii+1,0)
+    
 hist_difference.Sumw2()
 
 #calculate the prediction
 hist_ratio.Divide(hist_high_rsq)
-#hist_high_pred.Divide(hist_ratio)
 hist_difference.Add(hist_high_pred,-1.)
         
 
@@ -538,6 +696,9 @@ hist_high_rsq.Write()
 hist_ratio.Write()
 hist_signal.Write()
 
+
+################################################################
+
 #loop over all the low bins and setup the histograms
 for ii in range(len(hists_low)):
     max_val = max(low_list[ii])
@@ -563,320 +724,153 @@ for ii in range(len(hists_high)):
     
     hists_high[ii].Write()
 
-
-for ii in range(len(hists_high)):
-
-    gaus = hists_high[ii].GetFunction("gaus")
-
-    gaus_mean = 0
-    gaus_sigma = 1
-
-    if hists_high[ii].Integral() > 0 :
-        gaus_mean = gaus.GetParameter(1)
-        gaus_sigma = gaus.GetParameter(2)
-
-    error = gaus_sigma
-
-    true_val = hist_high_rsq_data.GetBinContent(ii+1)
-
-    rt.gStyle.SetLabelSize(0.05,"xyz");
-  
-    rt.gStyle.SetPadTopMargin(0.1);
-    rt.gStyle.SetPadRightMargin(0.10);
-    rt.gStyle.SetPadBottomMargin(0.2);
-    rt.gStyle.SetPadLeftMargin(0.15);
-
-    canvas = rt.TCanvas("canvas_bin%i"%ii,"Bin %i" %ii, 1024,768)
-
-    max_val = max(high_list[ii])
-    min_val = min(high_list[ii])
-    
-
-    p1 = gaus_mean + error
-    p2 = gaus_mean + 2 * error
-    p3 = gaus_mean + 3 * error
-    
-    m1 = gaus_mean - error
-    m2 = gaus_mean - 2 * error
-    m3 = gaus_mean - 3 * error
-
-
-    absmin = min([min_val, m3])
-    absmax = max([max_val, max_val, p3])
-
-    max_hist = hists_high[ii].GetMaximum()
-
-    graph1s = None
-    graph2s = None
-    
-    left_win1s = max(0,m1)
-    right_win1s = p1
-
-    left_win2s = max(0,m2)
-    right_win2s = p2
-
-    left_win3s = max(0,m3)
-    right_win3s = p3
+def get_canvases_and_68win(hists, name):
+    bin_dists = []
+    for ii in range(len(hists)):
+        gaus = hists[ii].GetFunction("gaus")
         
-    array1s_x = array.array("d",[left_win1s,left_win1s,right_win1s,right_win1s])
-    array2s_x = array.array("d",[left_win2s,left_win2s,right_win2s,right_win2s])
-    array3s_x = array.array("d",[left_win3s,left_win3s,right_win3s,right_win3s])
+        gaus_mean = 0
+        gaus_sigma = 1
 
-    array1s_y = array.array("d",[2*max_hist/10.,3.*max_hist/10.,3.*max_hist/10.,2*max_hist/10.])
-    array2s_y = array.array("d",[max_hist/10.,2.*max_hist/10.,2.*max_hist/10.,max_hist/10.])
-    array3s_y = array.array("d",[0,max_hist/10.,max_hist/10.,0])
+        if hists[ii].Integral() > 0 :
+            gaus_mean = gaus.GetParameter(1)
+            gaus_sigma = gaus.GetParameter(2)
 
+        error = gaus_sigma
 
-
-    fill_1s = rt.TGraph(4,array1s_x,array1s_y)
-    fill_2s = rt.TGraph(4,array2s_x,array2s_y)
-    fill_3s = rt.TGraph(4,array3s_x,array3s_y)
-
-    fill_1s.SetFillColor(rt.kRed)
-    fill_2s.SetFillColor(rt.kBlue)    
-    fill_3s.SetFillColor(rt.kGreen)
-    
-    fill_1s.SetFillStyle(3004)
-    fill_2s.SetFillStyle(3005)
-    fill_3s.SetFillStyle(3004)    
-
-    print absmin,absmax
-    
-    hists_high[ii].GetXaxis().SetRangeUser(absmin, absmax)
-    #    hists_high[ii].SetMarkerStyle(20)
-    #    hists_high[ii].SetFillStyle(3004)
-
-
-    hists_high[ii].Draw()
-    #pois = rt.TF1("poiss2","%f * TMath::Poisson(x,%f)" % (norm,true_val),absmin,absmax);
-    #pois.SetLineColor(rt.kBlack)
-    #pois.SetLineStyle(9)
-    
-    #    pois.Draw("same")
-
-    line = rt.TLine(true_val, 0, true_val, max_hist)
-    line.SetLineWidth(3)
-    line.Draw("same")
-
-    fill_1s.Draw("same")
-    fill_2s.Draw("same")
-    fill_3s.Draw("same")
-
-    #top of the gaussian
-    highest_point = 0
-    if gaus_mean != 0: highest_point = gaus.Eval(gaus_mean)
-    
-    line_mean = rt.TLine(gaus_mean, 0, gaus_mean, highest_point)
-    line_mean.SetLineColor(rt.kRed)
-    line_mean.SetLineWidth(3)
-    line_mean.Draw("same")
-
-    #    hists_high[ii].SetLineStyle(2)
-    hists_high[ii].SetFillColor(rt.kBlue)
-    hists_high[ii].SetFillStyle(3005)
-    hists_high[ii].SetLineWidth(1)
-    hists_high[ii].SetLineColor(rt.kBlue)
-
-    legend = rt.TLegend(.415,.394,.86,.738)
-#    legend.AddEntry(pois,"Poisson Distribution on Data","l")
-    legend.AddEntry(hists_high[ii],"Toy Distribution","f")
-    legend.AddEntry(gaus,"Gaussian Fit","l")
-    legend.AddEntry(line, "N Observed","l")
-#    legend.AddEntry(fill_1s,"1 #sigma confidence","f")
-#    legend.AddEntry(fill_2s,"2 #sigma confidence","f")
-#    legend.AddEntry(fill_3s,"99.7% confidence","f")
-
-    legend.SetFillColor(0)
-    legend.SetLineColor(0)
-
-    if not options.print_pdf: legend.Draw("same")
-
-    delta_text= rt.TPaveText(.125,1,.9,.9,"NDC");
-
-    delta = -9
-    if gaus_mean > 2:
-        delta = abs(gaus_mean - true_val) / gaus_sigma
-    else:
-        delta = float(true_val) / float(smallest_68(hists_low[ii]))
-
-    delta_text.SetTextFont(42);
-    delta_text.SetTextSize(0.04);
-    delta_text.SetFillColor(0); 
-    delta_text.SetTextAlign(12);
-    if gaus_mean > 2:
-        delta_text.AddText("#Delta = (N data - #mu_{gaus}) / #sigma_{gaus} = (%2.0f - %2.0f) / %2.2f = %2.2f" % (max(gaus_mean,0),true_val, gaus_sigma,delta));
-    else:
-        delta_text.AddText("#Delta = N_{obs} /  (.68 range) = %2.2f" % delta)
-
-    delta_text.Draw("same")
-    
-    canvas.Write()
-
-    if options.print_pdf:
-        canvas.SaveAs("canvas_%i.pdf" % ii)
-
-for ii in range(len(hists_low)):
-    max_val = max(low_list[ii])
-    min_val = min(low_list[ii])
-
-    hists_low[ii].GetXaxis().SetTitle("N Events %2.1f < M_{R} (TeV) < %2.1f" % (bins[ii],bins[ii+1]))
-
-    hists_low[ii].GetYaxis().SetTitle("N Toys")
-    
-    hists_low[ii].GetXaxis().SetTitleSize(.07)
-    hists_low[ii].GetYaxis().SetTitleSize(.07)
-    
-    hists_low[ii].Write()
-
-
-for ii in range(len(hists_low)):
-
-    gaus = hists_low[ii].GetFunction("gaus")
-
-    gaus_mean = 0
-    gaus_sigma = 1
-
-    if hists_low[ii].Integral() > 0 :
-        gaus_mean = gaus.GetParameter(1)
-        gaus_sigma = gaus.GetParameter(2)
-
-    error = gaus_sigma
-
-    true_val = hist_low_rsq_data.GetBinContent(ii+1)
-
-    rt.gStyle.SetLabelSize(0.05,"xyz");
-  
-    rt.gStyle.SetPadTopMargin(0.1);
-    rt.gStyle.SetPadRightMargin(0.10);
-    rt.gStyle.SetPadBottomMargin(0.2);
-    rt.gStyle.SetPadLeftMargin(0.15);
-
-    canvas = rt.TCanvas("low_canvas_bin%i"%ii,"Bin %i" %ii, 1024,768)
-
-    max_val = max(low_list[ii])
-    min_val = min(low_list[ii])
-    
-
-    p1 = gaus_mean + error
-    p2 = gaus_mean + 2 * error
-    p3 = gaus_mean + 3 * error
-    
-    m1 = gaus_mean - error
-    m2 = gaus_mean - 2 * error
-    m3 = gaus_mean - 3 * error
-
-    absmin = min([min_val, m3])
-    absmax = max([max_val, max_val, p3])
-
-    max_hist = hists_low[ii].GetMaximum()
-
-    graph1s = None
-    graph2s = None
-    
-    left_win1s = max(0,m1)
-    right_win1s = p1
-
-    left_win2s = max(0,m2)
-    right_win2s = p2
-
-    left_win3s = max(0,m3)
-    right_win3s = p3
+        true_val = hist_high_rsq_data.GetBinContent(ii+1)
+        exp_val = hist_high_rsq.GetBinContent(ii+1)
         
-    array1s_x = array.array("d",[left_win1s,left_win1s,right_win1s,right_win1s])
-    array2s_x = array.array("d",[left_win2s,left_win2s,right_win2s,right_win2s])
-    array3s_x = array.array("d",[left_win3s,left_win3s,right_win3s,right_win3s])
+        rt.gStyle.SetLabelSize(0.05,"xyz");
+        
+        rt.gStyle.SetPadTopMargin(0.1);
+        rt.gStyle.SetPadRightMargin(0.10);
+        rt.gStyle.SetPadBottomMargin(0.2);
+        rt.gStyle.SetPadLeftMargin(0.15);
+        
+        canvas = rt.TCanvas("%s_canvas_bin%i" % (name,ii),"Bin %i" %ii, 1024,768)
+        
+        
+        #determine the size of the window
+        max_val = max(high_list[ii])
+        min_val = min(high_list[ii])    
+        p3 = gaus_mean + 3 * error
+        m3 = gaus_mean - 3 * error
+        
+        absmin = min([min_val, m3])
+        absmax = max([max_val, max_val, p3])
+            
+        max_hist = hists[ii].GetMaximum()    
+        hists[ii].GetXaxis().SetRangeUser(absmin, absmax)
+        
+        
+        hists[ii].Draw()
+        
+        line = rt.TLine(true_val, 0, true_val, max_hist)
+        line.SetLineWidth(3)
+        line.Draw("same")
+        
+        exp_line = rt.TLine(exp_val, 0, exp_val, max_hist)
+        exp_line.SetLineWidth(3)
+        exp_line.SetLineStyle(2)
+        exp_line.Draw("same")
+        
+        window68 = get_smallest68_hist(exp_val,hists[ii])
+        window_l = window68[1]
+        window_r = window68[2]
+        
+        wleft_line = rt.TLine(window_l, 0, window_l, max_hist)
+        wleft_line.SetLineWidth(3)
+        wleft_line.SetLineStyle(2)
+        wleft_line.SetLineColor(rt.kGreen+1)
+        if window_l > 0: 
+            wleft_line.Draw("same")
+            
+        wright_line = rt.TLine(window_r, 0, window_r, max_hist)
+        wright_line.SetLineWidth(3)
+        wright_line.SetLineStyle(2)
+        wright_line.SetLineColor(rt.kGreen+1)
+        if window_r > 0:
+            wright_line.Draw("same")
 
-    array1s_y = array.array("d",[2*max_hist/10.,3.*max_hist/10.,3.*max_hist/10.,2*max_hist/10.])
-    array2s_y = array.array("d",[max_hist/10.,2.*max_hist/10.,2.*max_hist/10.,max_hist/10.])
-    array3s_y = array.array("d",[0,max_hist/10.,max_hist/10.,0])
-
-
-
-    fill_1s = rt.TGraph(4,array1s_x,array1s_y)
-    fill_2s = rt.TGraph(4,array2s_x,array2s_y)
-    fill_3s = rt.TGraph(4,array3s_x,array3s_y)
-
-    fill_1s.SetFillColor(rt.kRed)
-    fill_2s.SetFillColor(rt.kBlue)    
-    fill_3s.SetFillColor(rt.kGreen)
+        #top of the gaussian
+        highest_point = 0
+        if gaus_mean != 0: highest_point = gaus.Eval(gaus_mean)
     
-    fill_1s.SetFillStyle(3004)
-    fill_2s.SetFillStyle(3005)
-    fill_3s.SetFillStyle(3004)    
+        line_mean = rt.TLine(gaus_mean, 0, gaus_mean, highest_point)
+        line_mean.SetLineColor(rt.kRed)
+        line_mean.SetLineWidth(3)
+        
+        hists[ii].SetFillColor(rt.kBlue)
+        hists[ii].SetFillStyle(3005)
+        hists[ii].SetLineWidth(1)
+        hists[ii].SetLineColor(rt.kBlue)
+        
+        legend = rt.TLegend(.415,.394,.86,.738)
+        legend.AddEntry(hists[ii],"Toy Distribution","f")
+        legend.AddEntry(gaus,"Gaussian Fit","l")
+        legend.AddEntry(line, "N Observed","l")
+        legend.AddEntry(exp_line, "N Expected","l")
+        legend.AddEntry(wright_line, "68%  window","l")
+            
 
-    print absmin,absmax
+        legend.SetFillColor(0)
+        legend.SetLineColor(0)
+
+        if not options.print_pdf: legend.Draw("same")
+        
+        delta_text= rt.TPaveText(.125,1,.9,.9,"NDC");
+
+        delta = -9
     
-    hists_low[ii].GetXaxis().SetRangeUser(absmin, absmax)
-    #    hists_low[ii].SetMarkerStyle(20)
-    #    hists_low[ii].SetFillStyle(3004)
+        # if you expect 1 or less events do a one sided window
+        # otherwise do a two sided window
+        if exp_val > 1:
+            delta = abs(true_val - exp_val) / window68[0]
+        else:
+            delta = float(true_val) / float(smallest_68(hists[ii]))
+
+        delta_text.SetTextFont(42);
+        delta_text.SetTextSize(0.04);
+        delta_text.SetFillColor(0); 
+        delta_text.SetTextAlign(12);
+
+        #make the toy distribution object
+        toy_dist = toy_distribution()
+        toy_dist.left_68 = window_l
+        toy_dist.right_68 = window_r
+        toy_dist.nexp = exp_val
+        toy_dist.nobs = true_val
+        toy_dist.delta = delta
+
+        bin_dists.append(toy_dist)
+        
+        if exp_val > 1:
+            delta_text.AddText("#Delta = 2(N_{data} - N_{exp}) / win_{68} = 2(%2.0f - %2.0f) / %2.0f = %2.2f" % (true_val, exp_val, 2*window68[0] ,delta));
+        else:
+            delta_text.AddText("#Delta = N_{obs} /  (.68 range) = %2.2f" % delta)
+
+        delta_text.Draw("same")
+
+        canvas.Write()
+
+    return bin_dists
 
 
-    hists_low[ii].Draw()
+bin_dists_high = get_canvases_and_68win(hists_high,"high")
+bin_dists_low = get_canvases_and_68win(hists_low,"low")
 
-    line = rt.TLine(true_val, 0, true_val, max_hist)
-    line.SetLineWidth(3)
-    line.Draw("same")
+shi = collapse_toys(bin_dists_high)
+slow = collapse_toys(bin_dists_low)
 
-    fill_1s.Draw("same")
-    fill_2s.Draw("same")
-    fill_3s.Draw("same")
+graph68_high = build68graph(shi.nobs, shi.nexp, shi.right_vals, shi.left_vals, bins, "highgraph")
+graph68_low =  build68graph(slow.nobs, slow.nexp, slow.right_vals, slow.left_vals, bins, "lowgraph")
 
-    #top of the gaussian
-    lowest_point = 0
-    if gaus_mean != 0: lowest_point = gaus.Eval(gaus_mean)
-    
-    line_mean = rt.TLine(gaus_mean, 0, gaus_mean, lowest_point)
-    line_mean.SetLineColor(rt.kRed)
-    line_mean.SetLineWidth(3)
-    line_mean.Draw("same")
+print graph68_high
+print graph68_low
 
-    #    hists_low[ii].SetLineStyle(2)
-    hists_low[ii].SetFillColor(rt.kBlue)
-    hists_low[ii].SetFillStyle(3005)
-    hists_low[ii].SetLineWidth(1)
-    hists_low[ii].SetLineColor(rt.kBlue)
-
-    legend = rt.TLegend(.415,.394,.86,.738)
-#    legend.AddEntry(pois,"Poisson Distribution on Data","l")
-    legend.AddEntry(hists_low[ii],"Toy Distribution","f")
-    legend.AddEntry(gaus,"Gaussian Fit","l")
-    legend.AddEntry(line, "N Observed","l")
-#    legend.AddEntry(fill_1s,"1 #sigma confidence","f")
-#    legend.AddEntry(fill_2s,"2 #sigma confidence","f")
-#    legend.AddEntry(fill_3s,"99.7% confidence","f")
-
-    legend.SetFillColor(0)
-    legend.SetLineColor(0)
-
-    if not options.print_pdf: legend.Draw("same")
-
-    delta_text= rt.TPaveText(.125,1,.9,.9,"NDC");
-
-    print gaus_mean , true_val, gaus_sigma , "delta", delta
-
-    delta = -9
-    if gaus_mean > 2:
-        delta = abs(gaus_mean - true_val) / gaus_sigma
-    else:
-        delta = float(true_val) / float(smallest_68(hists_low[ii]))
-
-    delta_text.SetTextFont(42);
-    delta_text.SetTextSize(0.04);
-    delta_text.SetFillColor(0); 
-    delta_text.SetTextAlign(12);
-
-    if gaus_mean > 2:
-        delta_text.AddText("#Delta = (N data - #mu_{gaus}) / #sigma_{gaus} = (%2.0f - %2.0f) / %2.2f = %2.2f" % (max(gaus_mean,0),true_val, gaus_sigma,delta));
-    else:
-        delta_text.AddText("#Delta = N_{obs} /  (.68 containment window) = %2.2f" % delta)
-
-    delta_text.Draw("same")
-    
-    canvas.Write()
-
-    if options.print_pdf:
-        canvas.SaveAs("canvas_%i.pdf" % ii)
-
+graph68_high.Write()
+graph68_low.Write()
 
 file.Close()
 

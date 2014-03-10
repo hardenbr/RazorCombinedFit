@@ -207,6 +207,8 @@ parser.add_option("--mu", dest="mu",
 
 parser.print_help()
 
+bins = makebins(options.mrmin, 5., .1, .3)
+
 #FIRST SET THE BOUNDS IN MR AND RSQ
 mr_min_low = options.mrmin
 mr_min = bins[0]
@@ -219,7 +221,7 @@ r1_cut = options.rsq2
 r0 = r0_cut - options.ri
 r1 = r1_cut - options.ri
 
-bins = makebins(mr_min, 5., .1, .3)
+
 
 #IF WE ARE GENREATING A MIX OPEN THAT FILE FIRST AND MAKE IT
 do_mix =  options.mix_file != "no_file"
