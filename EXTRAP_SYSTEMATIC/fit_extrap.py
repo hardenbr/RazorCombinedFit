@@ -18,6 +18,7 @@ class toy_distribution:
     nobs = -1.
     delta = -1.
 
+
 def build68graph(nobs, x, r_x, l_x, bins, name):
     width = []
     y = [0] * len(x)
@@ -33,7 +34,7 @@ def build68graph(nobs, x, r_x, l_x, bins, name):
     ex_up = []
     ex_down = []
     obs_val = []
-
+    delta = []
 
     for ii in range(len(x)):
 
@@ -42,10 +43,11 @@ def build68graph(nobs, x, r_x, l_x, bins, name):
         print r_x[ii], l_x[ii]
         print "win_size", win_size
         if win_size == 0: win_size = 1
-        ex_up.append( (r_x[ii] - x[ii]) / win_size)
-        ex_down.append( (x[ii] - l_x[ii]) / win_size)
-        obs_val.append(-(nobs[ii] - x[ii]) / win_size)
-        delta = (nobs[ii] - x[ii]) / win_size
+
+        ex_up.append((r_x[ii] - x[ii]) / win_size)
+        ex_down.append((x[ii] - l_x[ii]) / win_size)
+        obs_val.append((nobs[ii] - x[ii]) / win_size)
+        delta.append((nobs[ii] - x[ii]) / win_size)
         
     print "win_size", win_size
     print "ex_up", ex_up
@@ -53,8 +55,12 @@ def build68graph(nobs, x, r_x, l_x, bins, name):
     print "obs_val", obs_val
     print "delta", delta
 
+    adjusted_bins = bins
+    for ii in range(len(width)):
+        adjusted_bins[ii] += width[ii]
 
-    bins_ar = array.array("f",bins)
+
+    bins_ar = array.array("f",adjusted_bins)
     x_ar = array.array("f", x)
     y_ar = array.array("f", y)
     ey_u_ar = array.array("f", ex_up)
@@ -77,6 +83,9 @@ def build68graph(nobs, x, r_x, l_x, bins, name):
     mg.Add(gr)
     mg.Add(gr2)
 
+    mg.SetMinimum(bins[0])
+    mg.SetMaximum(bins[-1])
+    
     mg.SetTitle(name)
     
     return mg
