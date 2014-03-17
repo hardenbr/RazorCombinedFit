@@ -11,9 +11,15 @@ mr_max = 7
 #(n_0, n_min, n_max) = (6, 1., 150)
 #(b_0, b_min, b_max) = (8, 3, 100)
 
-(m0_0, m0_min, m0_max) = (-.4,-1,0)
-(n_0, n_min, n_max) = (3, 1.2, 100)
-(b_0, b_min, b_max) = (7, 1, 100)
+#from "working" fit razor_output_samp1 and 0.root
+#(m0_0, m0_min, m0_max) = (-.4,-1,0)
+#(n_0, n_min, n_max) = (3, 1.2, 100)
+#(b_0, b_min, b_max) = (7, 1, 100)
+
+#test
+(m0_0, m0_min, m0_max) = (0,1,1)
+(n_0, n_min, n_max) = (90, 2, 100)
+(b_0, b_min, b_max) = (7, 1, 15)
 
 def make_cfg(filename, mr_min, rsq_min, rsq_max, n_tot):
     outfile = open(filename,"w")

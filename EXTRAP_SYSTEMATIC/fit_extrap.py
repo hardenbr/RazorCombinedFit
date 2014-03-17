@@ -4,22 +4,86 @@ import RootTools
 import array, os
 import random
 
+
 class error_summary:
-    left_vals = []
-    right_vals = []
-    nobs = []
-    nexp = []
-    delta = []
+    def __init__(self, list_of_toy_dists):
+        self.left_vals = []
+        self.right_vals = []
+        self.nobs = []
+        self.nexp = []
+        self.delta = []
 
+        for ii in list_of_toy_dists:
+            self.add_toy_dist(ii)
+
+    def add_toy_dist(self, dist):
+        self.left_vals.append(dist.get_l68())
+        self.right_vals.append(dist.get_r68())
+        self.nobs.append(dist.get_nobs())
+        self.nexp.append(dist.get_nexp())
+        self.delta.append(dist.get_delta())
+
+    def get_l68(self): return self.left_vals
+    def get_r68(self): return self.right_vals
+    def get_nobs(self): return self.nobs
+    def get_nexp(self): return self.nexp
+    def get_delta(self): return self.delta
+
+    def clear_vals(self):
+        self.left_vals = []
+        self.right_vals = []
+        self.nobs = []
+        self.nexp = []
+        self.delta = []
+
+class fit_toy_summary:
+
+    def __init__(self):
+        self.mr0 = []
+        self.n = []
+        self.b = []
+        self.ntot = []
+
+    #add a single toy
+    def add_toy_dist(self, mr0, n, b, ntot):
+        self.mr0.append(mr0)
+        self.n.append(n)
+        self.b.append(b)
+        self.ntot.append(ntot)
+
+    #retrieve a list of fit values
+    def get_mr0(self): return self.mr0
+    def get_n(self): return self.n
+    def get_b(self): return self.b
+    def get_ntot(self): return self.ntot
+
+    def get_ntoys(self): return len(self.mr0)
+
+#container class for a single distribution
 class toy_distribution:
-    left_68 = -1.
-    right_68 = -1.
-    nexp = -1.
-    nobs = -1.
-    delta = -1.
+    def __init__(self, l, r, ne, no, d):
+        (self.l, self.r, self.ne, self.no, self.d)  = (l,r,ne,no,d)
+
+    #retreive values of the container
+    def get_l68(self):return self.l
+    def get_r68(self):return self.r
+    def get_nexp(self):return self.ne
+    def get_nobs(self):return self.no
+    def get_delta(self):return self.d
 
 
-def build68graph(nobs, x, r_x, l_x, bins, name):
+def build68graph(error_summary, bins, name):
+
+    nobs = error_summary.get_nobs()
+    x = error_summary.get_nexp()
+    r_x = error_summary.get_r68()
+    l_x = error_summary.get_l68()
+
+    print "nobs",nobs,"\n"
+    print "x", x,"\n"
+    print "r_x",r_x,"\n"
+    print "l_x",l_x,"\n"
+    
     width = []
     y = [0] * len(x)
     
@@ -27,9 +91,7 @@ def build68graph(nobs, x, r_x, l_x, bins, name):
     for ii in range(len(bins)-1):
         w = bins[ii+1] - bins[ii]
         if w < 0: print "ERROR: BINS MUST BE INCREASING WIDTH"
-        width.append(w/2.0)
-    #last width is just the size of the previous width
-    #width.append((x[-1] - x[-2]) / 2.0)
+        width.append(w / 2.0)
 
     ex_up = []
     ex_down = []
@@ -37,11 +99,9 @@ def build68graph(nobs, x, r_x, l_x, bins, name):
     delta = []
 
     for ii in range(len(x)):
-
         win_size = (r_x[ii] - l_x[ii])
-
-        print r_x[ii], l_x[ii]
-        print "win_size", win_size
+#        print r_x[ii], l_x[ii]
+#        print "win_size", win_size
         if win_size == 0: win_size = 1
 
         ex_up.append((r_x[ii] - x[ii]) / win_size)
@@ -55,18 +115,23 @@ def build68graph(nobs, x, r_x, l_x, bins, name):
     print "obs_val", obs_val
     print "delta", delta
 
-    adjusted_bins = bins
+    adjusted_bins = []
+
+    for ii in bins:
+        adjusted_bins.append(ii)
+
+    print "PRE ADJUSTEMENT", adjusted_bins
+    
     for ii in range(len(width)):
         adjusted_bins[ii] += width[ii]
 
-
-    bins_ar = array.array("f",adjusted_bins)
-    x_ar = array.array("f", x)
-    y_ar = array.array("f", y)
-    ey_u_ar = array.array("f", ex_up)
-    ey_d_ar = array.array("f", ex_down)
-    width_ar = array.array("f", width)
-    obs_val_ar = array.array("f", obs_val) 
+    bins_ar = array.array("d",adjusted_bins)
+    x_ar = array.array("d", x)
+    y_ar = array.array("d", y)
+    ey_u_ar = array.array("d", ex_up)
+    ey_d_ar = array.array("d", ex_down)
+    width_ar = array.array("d", width)
+    obs_val_ar = array.array("d", obs_val) 
     
     mg = rt.TMultiGraph(name,name)
     
@@ -84,37 +149,10 @@ def build68graph(nobs, x, r_x, l_x, bins, name):
     mg.Add(gr2)
 
     mg.SetMinimum(bins[0])
-    mg.SetMaximum(bins[-1])
-    
+    mg.SetMaximum(bins[-1])    
     mg.SetTitle(name)
     
     return mg
-
-    
-def collapse_toys(dist):
-    left_vals = []
-    right_vals = []
-    nobs = []
-    nexp = []
-    delta = []
-
-    for ii in dist:
-        left_vals.append(ii.left_68)
-        right_vals.append(ii.right_68)
-        nobs.append(ii.nobs)
-        nexp.append(ii.nexp)
-        delta.append(ii.delta)
-
-    error_sum = error_summary()
-
-    error_sum.left_vals = left_vals
-    error_sum.right_vals = right_vals
-    error_sum.nobs = nobs
-    error_sum.nexp = nexp
-    error_sum.delta = delta
-
-    return error_sum
-
 
 #exponentially increasing bin sizes
 def makebins(start_,end_,inc_,inc_inc_):
@@ -226,8 +264,8 @@ r1_cut = options.rsq2
 r0 = r0_cut - options.ri
 r1 = r1_cut - options.ri
 
-bins = makebins(mr_min, 2.5,.1,.1)
-
+bins = makebins(mr_min, 3.0, .1, .1)
+fit_toy_summary = fit_toy_summary()
 mr_cutoff = bins[-1]
 rsq_cutoff = 5
 
@@ -245,7 +283,7 @@ def highest_filled_bin(hist):
         bin -= 1
 
 def get_smallest68_hist(exp, hist):
-    width_left = 1
+    width_left = 0
     width_right = 0
 
     total_events = hist.Integral()
@@ -253,19 +291,15 @@ def get_smallest68_hist(exp, hist):
     low_bin = lowest_filled_bin(hist)
     high_bin = highest_filled_bin(hist)
     exp_bin = hist.GetXaxis().FindBin(exp)#hist.GetMaximumBin()###
-
-#    print low_bin, high_bin, exp_bin
+    zero_bin = hist.GetXaxis().FindBin(0)
     
     while True:
         left_edge = exp_bin - width_left
         right_edge = exp_bin + width_right
 
-#        print "width_left, width_right", width_left, width_right
-#        print "left,right", left_edge, right_edge
-        if left_edge < 0 : left_edge = 0            
+        if left_edge < 0 : left_edge = 1            
         if right_edge > high_bin: right_edge = high_bin
                 
-        #if exp_bin not in xrange(left_edge, right_edge): continue            
         integral = float(hist.Integral(left_edge, right_edge))
         containment = integral / total_events
 
@@ -273,14 +307,18 @@ def get_smallest68_hist(exp, hist):
             left_val = hist.GetBinLowEdge(left_edge)
             right_val = hist.GetBinLowEdge(right_edge)
 
-            return (float(right_val - left_val) / 2., left_val, right_val)
+            #once we have containment return a tuple ( sigma_eff, left value, right_value)            
+            if left_val == right_val:
+                return (1,hist.GetBinLowEdge(left_edge),hist.GetBinLowEdge(left_edge+1)) #special case of 68 existing in one bin
+            else:
+                return (float(right_val - left_val) / 2., left_val, right_val)
 
-        move_left = hist.Integral(left_edge - 2, left_edge) 
-        move_right = hist.Integral(right_edge, right_edge + 2)
-
-#        print move_left, move_right
+        move_left = hist.Integral(left_edge - 1, left_edge) 
+        move_right = hist.Integral(right_edge, right_edge + 1)
         
-        if move_left > move_right :
+        if left_edge == 0:
+            width_right += 1
+        elif move_left > move_right:
             width_left += 1
         else:
             width_right += 1
@@ -428,7 +466,6 @@ hist_low_rsq_data = rt.TH1F("hist_low_data","Low Rsq Data",len(bins)-1,array.arr
 hist_high_rsq_data = rt.TH1F("hist_high_data","High Rsq Data",len(bins)-1,array.array("d",bins))
 hist_high_rsq_signal = rt.TH1F("hist_high_signal","High Rsq Signal",len(bins)-1,array.array("d",bins))
 
-
 low_cut_data = "(PFMR/1000.)>%f && PFR^2 > %f && PFR^2 < %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min,r0_cut, r1_cut,options.samp)
 high_cut_data = "(PFMR/1000.)>%f && PFR^2 > %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min,r1_cut,options.samp)
 
@@ -550,6 +587,7 @@ def get_bin_errors(fr, norm):
 
         if int_low ==0 or int_high == 0:continue
 
+        fit_toy_summary.add_toy_dist(M0_toy, n_toy, b_toy, Ntot_toy)
 
         #do the integral for each bin        
         for jj in range(len(bins) - 1):
@@ -571,7 +609,7 @@ def get_bin_errors(fr, norm):
             low_list[jj].append(pois_low)            
             high_list[jj].append(pois_high)
 
-    return (low_list,high_list,hists_low,hists_high)
+    return (low_list, high_list, hists_low, hists_high)
 
 tree.Draw("PFMR/1000>>hist_low_data",low_cut_data)
 tree.Draw("PFMR/1000>>hist_high_data",high_cut_data)
@@ -580,8 +618,6 @@ if do_mix:
     tree_signal.Draw("PFMR>>hist_signal",high_cut_signal)
     #add the signal to the high rsq events
     tree_signal.Draw("PFMR>>+hist_high_data",high_cut_signal)
-
-
 
 file = rt.TFile("weight_hist.root","RECREATE")
     
@@ -596,9 +632,8 @@ print "N_HIGH_RSQ_DATA", n_high_rsq_data
 
 #get the errors
 (low_list, high_list, hists_low, hists_high) = get_bin_errors(fr, n_high_rsq_data)
-#(low_errors, high_errors) = get_sigma(low_list,high_list)
 
-#fit the histograms
+#fit the histograms with gaussians
 for ii in hists_low:    
     print "\n",ii
     ii.Fit("gaus","q")    
@@ -649,8 +684,8 @@ for ii in range(len(bins) - 1):
     if fit_high_hist.Integral() > 0:
         high_error = get_smallest68_hist(high,fit_high_hist)[0]        
 
-    if low < 3: low_error = smallest_68(fit_low_hist)
-    if high < 3: high_error = smallest_68(fit_high_hist)
+#    if low < 3: low_error = smallest_68(fit_low_hist)
+#    if high < 3: high_error = smallest_68(fit_high_hist)
 
     print "\t\t low_error: %f high_error: %f" % (low_error,high_error)
 
@@ -705,7 +740,9 @@ hist_high_rsq.Write()
 hist_ratio.Write()
 hist_signal.Write()
 
-
+#END BUILDING HIST DATA
+###############################################################
+#MAKING CANVASES
 ################################################################
 
 #loop over all the low bins and setup the histograms
@@ -747,22 +784,37 @@ def get_canvases_and_68win(hists, name):
 
         error = gaus_sigma
 
-        true_val = hist_high_rsq_data.GetBinContent(ii+1)
-        exp_val = hist_high_rsq.GetBinContent(ii+1)
+        true_val = exp_val = -1
+
+        if name == "high":
+            true_val = hist_high_rsq_data.GetBinContent(ii+1)
+            exp_val = hist_high_rsq.GetBinContent(ii+1)
+        elif name == "low":
+            true_val = hist_low_rsq_data.GetBinContent(ii+1)
+            exp_val = hist_low_rsq.GetBinContent(ii+1)
+        else:
+            print "WARNING :: GRAPH NAME NOT FOUND"
         
         rt.gStyle.SetLabelSize(0.05,"xyz");
-        
         rt.gStyle.SetPadTopMargin(0.1);
         rt.gStyle.SetPadRightMargin(0.10);
         rt.gStyle.SetPadBottomMargin(0.2);
         rt.gStyle.SetPadLeftMargin(0.15);
         
         canvas = rt.TCanvas("%s_canvas_bin%i" % (name,ii),"Bin %i" %ii, 1024,768)
-        
-        
+                
         #determine the size of the window
-        max_val = max(high_list[ii])
-        min_val = min(high_list[ii])    
+        max_val = min_val = -1 
+        if name == "high":
+            max_val = max(high_list[ii])
+            min_val = min(high_list[ii])    
+        elif name == "low":
+            max_val = max(low_list[ii])
+            min_val = min(low_list[ii])    
+        else:
+            print "WARNING :: GRAPH NAME NOT FOUND"
+            
+
         p3 = gaus_mean + 3 * error
         m3 = gaus_mean - 3 * error
         
@@ -835,9 +887,10 @@ def get_canvases_and_68win(hists, name):
         # if you expect 1 or less events do a one sided window
         # otherwise do a two sided window
         if exp_val > 1:
-            delta = abs(true_val - exp_val) / window68[0]
+            delta = (true_val - exp_val) / window68[0]
         else:
-            delta = float(true_val) / float(smallest_68(hists[ii]))
+            delta = (true_val - exp_val) / window68[0]
+            #delta = float(true_val) / float(smallest_68(hists[ii]))
 
         delta_text.SetTextFont(42);
         delta_text.SetTextSize(0.04);
@@ -845,19 +898,16 @@ def get_canvases_and_68win(hists, name):
         delta_text.SetTextAlign(12);
 
         #make the toy distribution object
-        toy_dist = toy_distribution()
-        toy_dist.left_68 = window_l
-        toy_dist.right_68 = window_r
-        toy_dist.nexp = exp_val
-        toy_dist.nobs = true_val
-        toy_dist.delta = delta
+        toy_dist = toy_distribution(window_l, window_r, exp_val, true_val, delta)
 
+        #add it to the list of istirubtions
         bin_dists.append(toy_dist)
         
         if exp_val > 1:
             delta_text.AddText("#Delta = 2(N_{data} - N_{exp}) / win_{68} = 2(%2.0f - %2.0f) / %2.0f = %2.2f" % (true_val, exp_val, 2*window68[0] ,delta));
         else:
-            delta_text.AddText("#Delta = N_{obs} /  (.68 range) = %2.2f" % delta)
+            delta_text.AddText("#Delta = 2(N_{data} - N_{exp}) / win_{68} = 2(%2.0f - %2.0f) / %2.0f = %2.2f" % (true_val, exp_val, 2*window68[0] ,delta));
+            #delta_text.AddText("#Delta = N_{obs} /  (.68 range) = %2.2f" % delta)
 
         delta_text.Draw("same")
 
@@ -865,18 +915,78 @@ def get_canvases_and_68win(hists, name):
 
     return bin_dists
 
+#build a tree out of the toy parameters
+# Make a tree
+fit_toy_tree = rt.TTree('fit_toy_tree','tree containing the toy fit parameters')
 
-bin_dists_high = get_canvases_and_68win(hists_high,"high")
-bin_dists_low = get_canvases_and_68win(hists_low,"low")
+# Create a struct
+rt.gROOT.ProcessLine(\
+      "struct MyStruct{\
+      Float_t mr0;\
+      Float_t n;\
+      Float_t b;\
+      Float_t ntot;\
+      };")
 
-shi = collapse_toys(bin_dists_high)
-slow = collapse_toys(bin_dists_low)
+from ROOT import MyStruct
 
-graph68_high = build68graph(shi.nobs, shi.nexp, shi.right_vals, shi.left_vals, bins, "highgraph")
-graph68_low =  build68graph(slow.nobs, slow.nexp, slow.right_vals, slow.left_vals, bins, "lowgraph")
+# Create branches in the tree
+struct = MyStruct()
+fit_toy_tree.Branch('mr0',rt.AddressOf(struct,'mr0'),'mr0/F')
+fit_toy_tree.Branch('n',rt.AddressOf(struct,'n'),'n/F')
+fit_toy_tree.Branch('b',rt.AddressOf(struct,'b'),'b/F')
+fit_toy_tree.Branch('ntot',rt.AddressOf(struct,'ntot'),'ntot/F')
 
-print graph68_high
-print graph68_low
+mr0_list = fit_toy_summary.get_mr0()
+n_list = fit_toy_summary.get_n()
+b_list = fit_toy_summary.get_b()
+ntot_list = fit_toy_summary.get_ntot()
+
+# Fill tree
+for toy in range(fit_toy_summary.get_ntoys()):
+    struct.mr0 = mr0_list[toy]
+    struct.n = n_list[toy]
+    struct.b = b_list[toy]
+    struct.ntot = ntot_list[toy]
+    fit_toy_tree.Fill()
+    
+fit_toy_tree.Write()
+
+#draw the toy canvses and get the distributions
+bin_dists_high = get_canvases_and_68win(hists_high, "high")
+bin_dists_low = get_canvases_and_68win(hists_low, "low")
+
+
+
+#build an object containing a collpased list of the information from the bin distirbutions
+error_sum_high = error_summary(bin_dists_high)
+error_sum_low = error_summary(bin_dists_low)
+
+
+#build the pull distribution
+hist_pull_high = rt.TH1F("pull_hist_high","pull distirbution of high bins",20,-3,3)
+hist_pull_low = rt.TH1F("pull_hist_low","pull distirbution of low bins",20,-3,3)
+
+#get the delta distributions from the error summary
+delta_high = error_sum_high.get_delta()
+delta_low = error_sum_low.get_delta()
+
+#fill the pull distributions
+for ii in delta_high: hist_pull_high.Fill(ii)
+for ii in delta_low: hist_pull_low.Fill(ii)
+
+hist_pull_high.Write()
+hist_pull_low.Write()
+
+#build the graphs that will go in the canvas
+
+print error_sum_high
+
+print error_sum_low
+
+graph68_high = build68graph(error_sum_high, bins, "highgraph")
+error_sum_high.clear_vals()
+graph68_low =  build68graph(error_sum_low, bins, "lowgraph")
 
 graph68_high.Write()
 graph68_low.Write()

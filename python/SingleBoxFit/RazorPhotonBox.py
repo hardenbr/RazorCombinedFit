@@ -28,7 +28,7 @@ class RazorPhotonBox(RazorBox.RazorBox):
 
     #add penalty terms and float
     def float1stComponent(self,flavour):
-        self.fixParsExact("MR0_%s" % flavour, False)
+#        self.fixParsExact("MR0_%s" % flavour, False)
 #        self.fixParsExact("R0_%s" % flavour, False)
         self.fixParsExact("b_%s" % flavour, False)
         self.fixParsExact("n_%s" % flavour, False)
