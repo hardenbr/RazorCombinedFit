@@ -1,8 +1,8 @@
-from  optparse  import OptionParser
+from optparse  import OptionParser
 import ROOT as rt
 import RootTools
 import array, os
-import random
+import random, math
 
 
 class error_summary:
@@ -71,13 +71,19 @@ class toy_distribution:
     def get_nobs(self):return self.no
     def get_delta(self):return self.d
 
-
+#build graph and exp_up and exp_down
 def build68graph(error_summary, bins, name):
 
     nobs = error_summary.get_nobs()
     x = error_summary.get_nexp()
     r_x = error_summary.get_r68()
     l_x = error_summary.get_l68()
+
+    #build the sigma up and sigma down histograms
+    hist_exp_up = rt.TH1F("hist_%s_up" % name,"68% Toy Window",len(bins)-1,array.array("d",bins))
+    hist_exp_down = rt.TH1F("hist_%s_down" % name,"expectation sigma down",len(bins)-1,array.array("d",bins))
+    for bin in range(len(r_x)): hist_exp_up.SetBinContent(bin+1, r_x[bin])
+    for bin in range(len(l_x)): hist_exp_down.SetBinContent(bin+1, l_x[bin])
 
     print "nobs",nobs,"\n"
     print "x", x,"\n"
@@ -104,11 +110,18 @@ def build68graph(error_summary, bins, name):
 #        print "win_size", win_size
         if win_size == 0: win_size = 1
 
-        ex_up.append((r_x[ii] - x[ii]) / win_size)
-        ex_down.append((x[ii] - l_x[ii]) / win_size)
-        obs_val.append((nobs[ii] - x[ii]) / win_size)
-        delta.append((nobs[ii] - x[ii]) / win_size)
-        
+
+        if x[ii] > 1:
+            ex_up.append((r_x[ii] - x[ii]) / win_size)
+            ex_down.append((x[ii] - l_x[ii]) / win_size)
+            obs_val.append((nobs[ii] - x[ii]) / win_size)
+            delta.append((nobs[ii] - x[ii]) / win_size)
+        else:
+            ex_down.append((r_x[ii] - x[ii]) / win_size)
+            ex_up.append(0)
+            obs_val.append((nobs[ii]) / win_size)
+            delta.append((nobs[ii] - x[ii]) / win_size)
+
     print "win_size", win_size
     print "ex_up", ex_up
     print "ex_down", ex_down
@@ -132,14 +145,15 @@ def build68graph(error_summary, bins, name):
     ey_d_ar = array.array("d", ex_down)
     width_ar = array.array("d", width)
     obs_val_ar = array.array("d", obs_val) 
-    
+
+
     mg = rt.TMultiGraph(name,name)
     
     gr = rt.TGraphAsymmErrors(len(x),  bins_ar, y_ar, width_ar, width_ar, ey_u_ar, ey_d_ar)
     gr.SetLineColor(rt.kBlack)
     gr.SetLineWidth(2)
-    gr.SetFillColor(rt.kBlue+2)
-    gr.SetFillStyle(3002)
+    gr.SetFillColor(rt.kBlue-9)
+#    gr.SetFillStyle(3000)
     
     gr2 = rt.TGraphAsymmErrors(len(x),  bins_ar, obs_val_ar, y_ar, y_ar, y_ar,y_ar)
     gr2.SetMarkerStyle(20)
@@ -152,18 +166,21 @@ def build68graph(error_summary, bins, name):
     mg.SetMaximum(bins[-1])    
     mg.SetTitle(name)
     
-    return mg
+    return (hist_exp_up, hist_exp_down, mg)
 
 #exponentially increasing bin sizes
 def makebins(start_,end_,inc_,inc_inc_):
     bin = start_
     inc = inc_
     list = []
-    while bin < end_:
+    while True:
         list.append(bin)
         bin+=inc
         inc*= (1+inc_inc_)
-    return list
+
+        if bin > end_:
+            list.append(bin)
+            return list
 
 
 #speed up the drawing by supressing x11
@@ -261,13 +278,13 @@ mr_min = mr_min_low
 r0_cut = options.rsq1
 r1_cut = options.rsq2 
 
-r0 = r0_cut - options.ri
-r1 = r1_cut - options.ri
+r0 = r0_cut
+r1 = r1_cut
 
-bins = makebins(mr_min, 3.0, .1, .1)
+bins = makebins(mr_min, 4.5, .1, .2)
 fit_toy_summary = fit_toy_summary()
 mr_cutoff = bins[-1]
-rsq_cutoff = 5
+rsq_cutoff = 1
 
 def lowest_filled_bin(hist):
     bin = 1
@@ -292,12 +309,15 @@ def get_smallest68_hist(exp, hist):
     high_bin = highest_filled_bin(hist)
     exp_bin = hist.GetXaxis().FindBin(exp)#hist.GetMaximumBin()###
     zero_bin = hist.GetXaxis().FindBin(0)
-    
+
+    counter = 0 
     while True:
+        if counter > 300: return (100,0,100)
+        counter+=1
         left_edge = exp_bin - width_left
         right_edge = exp_bin + width_right
 
-        if left_edge < 0 : left_edge = 1            
+        if left_edge < 1 : left_edge = 1            
         if right_edge > high_bin: right_edge = high_bin
                 
         integral = float(hist.Integral(left_edge, right_edge))
@@ -311,12 +331,15 @@ def get_smallest68_hist(exp, hist):
             if left_val == right_val:
                 return (1,hist.GetBinLowEdge(left_edge),hist.GetBinLowEdge(left_edge+1)) #special case of 68 existing in one bin
             else:
-                return (float(right_val - left_val) / 2., left_val, right_val)
+                return (float(right_val - left_val + 1) / 2., left_val, right_val)
 
-        move_left = hist.Integral(left_edge - 1, left_edge) 
-        move_right = hist.Integral(right_edge, right_edge + 1)
+        move_left = hist.GetBinContent(left_edge-1)
+        if left_edge == 1:
+            move_left = 0
+            
+        move_right = hist.GetBinContent(right_edge+1)
         
-        if left_edge == 0:
+        if left_edge == 1:
             width_right += 1
         elif move_left > move_right:
             width_left += 1
@@ -578,12 +601,17 @@ def get_bin_errors(fr, norm):
         M0_high_toy = M0_toy
 
         if options.debug: print "b", b_high_toy, "n",n_high_toy
+        int_low = int_high = 0
 
         #find the fit normalization
-        if options.debug: print "\ndoing low integral.."
-        int_low = integral_fit(mr_min_low, mr_cutoff, b_toy, M0_toy, n_toy)
-        if options.debug: print "\ndoing high integral.."
-        int_high = integral_fit(mr_min, mr_cutoff, b_high_toy, M0_high_toy, n_high_toy)
+        try:
+            if options.debug: print "\ndoing low integral.."
+            int_low = integral_fit(mr_min_low, mr_cutoff, b_toy, M0_toy, n_toy)
+            if options.debug: print "\ndoing high integral.."
+            int_high = integral_fit(mr_min, mr_cutoff, b_high_toy, M0_high_toy, n_high_toy)
+        except OverflowError:
+            print "OVERFLOW ERROR n: %f b:%f mr0: %f: " % (n_toy, b_toy, M0_toy)
+            continue
 
         if int_low ==0 or int_high == 0:continue
 
@@ -636,9 +664,9 @@ print "N_HIGH_RSQ_DATA", n_high_rsq_data
 #fit the histograms with gaussians
 for ii in hists_low:    
     print "\n",ii
-    ii.Fit("gaus","q")    
+    ii.Fit("gaus","0q")    
 for ii in hists_high:
-    ii.Fit("gaus","q")
+    ii.Fit("gaus","q0")
 
 #integrate each bin and assign errors
 for ii in range(len(bins) - 1):
@@ -662,10 +690,15 @@ for ii in range(len(bins) - 1):
 
     print "bin: (%f,%f) low: %f high: %f" % (m1,m2,low,high)
 
-    if low != 0:
-        ratio = (high/low)
+    high_data = float(hist_high_rsq_data.GetBinContent(ii+1))
+    low_data = float(hist_low_rsq_data.GetBinContent(ii+1))
+    
+    if high_data != 0:
+        ratio = (low_data/high_data)
+        print "RATIO VALUE:", ratio
     else:
-        ratio = -999
+        ratio = -1
+        
     #fill the histograms
     hist_low_rsq.SetBinContent(ii+1,low)    
     hist_high_rsq.SetBinContent(ii+1,high)
@@ -684,16 +717,19 @@ for ii in range(len(bins) - 1):
     if fit_high_hist.Integral() > 0:
         high_error = get_smallest68_hist(high,fit_high_hist)[0]        
 
-#    if low < 3: low_error = smallest_68(fit_low_hist)
-#    if high < 3: high_error = smallest_68(fit_high_hist)
+    #compute the ratio error
 
+    ratio_error = 0
+    if low != 0:
+        ratio_error = math.sqrt((1/low)*(1/low)*low_error*low_error + (high/low)*(high/low)*high_error*high_error)
+    hist_ratio.SetBinError(ii+1, ratio_error)
+        
     print "\t\t low_error: %f high_error: %f" % (low_error,high_error)
 
-    hist_low_rsq.SetBinError(ii+1, low_error)
-    hist_high_rsq.SetBinError(ii+1, high_error)
+#    hist_low_rsq.SetBinError(ii+1, low_error)
+    #hist_high_rsq.SetBinError(ii+1, high_error)
                      
 #clone the low rsq
-hist_ratio = hist_low_rsq.Clone("hist_ratio")
 hist_low_pred = hist_low_rsq.Clone("hist_low_pred")
 hist_high_pred = hist_high_rsq.Clone("hist_high_pred")
 hist_difference = hist_high_rsq_data.Clone("hist_difference")
@@ -701,24 +737,22 @@ hist_difference = hist_high_rsq_data.Clone("hist_difference")
 #there are no errors on the number of observed data
 for ii in range(len(bins)-1):
     hist_difference.SetBinError(ii+1,0)
-    hist_high_rsq_data.SetBinError(ii+1,0)
+    #hist_high_rsq_data.SetBinError(ii+1,0)
     
-hist_difference.Sumw2()
+#hist_difference.Sumw2()
 
 #calculate the prediction
-hist_ratio.Divide(hist_high_rsq)
 hist_difference.Add(hist_high_pred,-1.)
         
 
 hist_ratio.SetFillColor(rt.kOrange+1)
 hist_ratio.SetLineColor(rt.kOrange+1)
-hist_ratio.SetFillStyle(3001)
+#hist_ratio.SetFillStyle(3001)
 hist_ratio.GetXaxis().SetTitle("M_{R} [TeV]")
-hist_ratio.GetYaxis().SetTitle("Low R^{2} / High R^{2}")
+hist_ratio.GetYaxis().SetTitle("High R^{2} / Low R^{2}")
 
 hist_ratio.GetXaxis().SetTitleSize(.07)
 hist_ratio.GetYaxis().SetTitleSize(.07)
-
 
 hist_high_pred.GetXaxis().SetTitle("M_{R} [TeV]")
 hist_high_pred.GetYaxis().SetTitle("N Events")
@@ -784,7 +818,8 @@ def get_canvases_and_68win(hists, name):
 
         error = gaus_sigma
 
-        true_val = exp_val = -1
+        true_val = 0
+        exp_val = -1
 
         if name == "high":
             true_val = hist_high_rsq_data.GetBinContent(ii+1)
@@ -841,16 +876,16 @@ def get_canvases_and_68win(hists, name):
         window_r = window68[2]
         
         wleft_line = rt.TLine(window_l, 0, window_l, max_hist)
-        wleft_line.SetLineWidth(3)
-        wleft_line.SetLineStyle(2)
-        wleft_line.SetLineColor(rt.kGreen+1)
-        if window_l > 0: 
-            wleft_line.Draw("same")
+        wleft_line.SetLineWidth(4)
+        #wleft_line.SetLineStyle(2)
+        wleft_line.SetLineColor(rt.kRed)
+        #if window_l > 0: 
+        wleft_line.Draw("same")
             
-        wright_line = rt.TLine(window_r, 0, window_r, max_hist)
-        wright_line.SetLineWidth(3)
-        wright_line.SetLineStyle(2)
-        wright_line.SetLineColor(rt.kGreen+1)
+        wright_line = rt.TLine(window_r+1, 0, window_r+1, max_hist)
+        wright_line.SetLineWidth(4)
+        #wright_line.SetLineStyle(2)
+        wright_line.SetLineColor(rt.kRed)
         if window_r > 0:
             wright_line.Draw("same")
 
@@ -862,14 +897,14 @@ def get_canvases_and_68win(hists, name):
         line_mean.SetLineColor(rt.kRed)
         line_mean.SetLineWidth(3)
         
-        hists[ii].SetFillColor(rt.kBlue)
-        hists[ii].SetFillStyle(3005)
+        hists[ii].SetFillColor(rt.kAzure-9)
+#        hists[ii].SetFillStyle(3000)
         hists[ii].SetLineWidth(1)
-        hists[ii].SetLineColor(rt.kBlue)
+        hists[ii].SetLineColor(rt.kAzure-9)
         
         legend = rt.TLegend(.415,.394,.86,.738)
         legend.AddEntry(hists[ii],"Toy Distribution","f")
-        legend.AddEntry(gaus,"Gaussian Fit","l")
+        #legend.AddEntry(gaus,"Gaussian Fit","l")
         legend.AddEntry(line, "N Observed","l")
         legend.AddEntry(exp_line, "N Expected","l")
         legend.AddEntry(wright_line, "68%  window","l")
@@ -889,7 +924,7 @@ def get_canvases_and_68win(hists, name):
         if exp_val > 1:
             delta = (true_val - exp_val) / window68[0]
         else:
-            delta = (true_val - exp_val) / window68[0]
+            delta = (true_val - exp_val) / (window68[0]*2)
             #delta = float(true_val) / float(smallest_68(hists[ii]))
 
         delta_text.SetTextFont(42);
@@ -904,9 +939,9 @@ def get_canvases_and_68win(hists, name):
         bin_dists.append(toy_dist)
         
         if exp_val > 1:
-            delta_text.AddText("#Delta = 2(N_{data} - N_{exp}) / win_{68} = 2(%2.0f - %2.0f) / %2.0f = %2.2f" % (true_val, exp_val, 2*window68[0] ,delta));
+            delta_text.AddText("#Delta = 2(N_{data} - N_{exp}) / win_{68} = 2(%2.1f - %2.1f) / %2.0f = %2.2f" % (true_val, exp_val, 2*window68[0] ,delta));
         else:
-            delta_text.AddText("#Delta = 2(N_{data} - N_{exp}) / win_{68} = 2(%2.0f - %2.0f) / %2.0f = %2.2f" % (true_val, exp_val, 2*window68[0] ,delta));
+            delta_text.AddText("#Delta = (N_{data} - N_{exp}) / win_{68} = (%2.1f - %2.1f) / %2.0f = %2.2f" % (true_val, exp_val, 2*window68[0] ,delta));
             #delta_text.AddText("#Delta = N_{obs} /  (.68 range) = %2.2f" % delta)
 
         delta_text.Draw("same")
@@ -956,12 +991,9 @@ fit_toy_tree.Write()
 bin_dists_high = get_canvases_and_68win(hists_high, "high")
 bin_dists_low = get_canvases_and_68win(hists_low, "low")
 
-
-
 #build an object containing a collpased list of the information from the bin distirbutions
 error_sum_high = error_summary(bin_dists_high)
 error_sum_low = error_summary(bin_dists_low)
-
 
 #build the pull distribution
 hist_pull_high = rt.TH1F("pull_hist_high","pull distirbution of high bins",20,-3,3)
@@ -970,26 +1002,25 @@ hist_pull_low = rt.TH1F("pull_hist_low","pull distirbution of low bins",20,-3,3)
 #get the delta distributions from the error summary
 delta_high = error_sum_high.get_delta()
 delta_low = error_sum_low.get_delta()
-
 #fill the pull distributions
 for ii in delta_high: hist_pull_high.Fill(ii)
 for ii in delta_low: hist_pull_low.Fill(ii)
-
+#save pulls
 hist_pull_high.Write()
 hist_pull_low.Write()
 
 #build the graphs that will go in the canvas
+(high_exp_up, high_exp_down, graph68_high) = build68graph(error_sum_high, bins, "high")
+#error_sum_high.clear_vals()
+(low_exp_up, low_exp_down, graph68_low) =  build68graph(error_sum_low, bins, "low")
 
-print error_sum_high
+high_exp_up.Write()
+high_exp_down.Write()
+low_exp_up.Write()
+low_exp_down.Write()
 
-print error_sum_low
-
-graph68_high = build68graph(error_sum_high, bins, "highgraph")
-error_sum_high.clear_vals()
-graph68_low =  build68graph(error_sum_low, bins, "lowgraph")
-
-graph68_high.Write()
-graph68_low.Write()
+graph68_high.Write("highgraph")
+graph68_low.Write("lowgraph")
 
 file.Close()
 

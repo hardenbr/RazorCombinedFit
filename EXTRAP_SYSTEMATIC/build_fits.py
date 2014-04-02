@@ -6,20 +6,25 @@ from  optparse  import OptionParser
 rt.gROOT.SetBatch(True)
 
 mr_max = 7
-# working initial fit params feb-24-2014
-#(m0_0, m0_min, m0_max) = (0,-.3,0)
-#(n_0, n_min, n_max) = (6, 1., 150)
-#(b_0, b_min, b_max) = (8, 3, 100)
-
 #from "working" fit razor_output_samp1 and 0.root
 #(m0_0, m0_min, m0_max) = (-.4,-1,0)
 #(n_0, n_min, n_max) = (3, 1.2, 100)
 #(b_0, b_min, b_max) = (7, 1, 100)
 
+#stable samp0
+#(m0_0, m0_min, m0_max) = (.1,-.3,.3)
+#(n_0, n_min, n_max) = (15, 1.3, 1000)
+#(b_0, b_min, b_max) = (7, 1, 100)
+
+#stable samp1
+(m0_0, m0_min, m0_max) = (0,-1,1)
+(n_0, n_min, n_max) = (6, 4, 100)
+(b_0, b_min, b_max) = (8, 1, 10)
+
 #test
-(m0_0, m0_min, m0_max) = (0,1,1)
-(n_0, n_min, n_max) = (90, 2, 100)
-(b_0, b_min, b_max) = (7, 1, 15)
+#(m0_0, m0_min, m0_max) = (.1,-.3,.3)
+#(n_0, n_min, n_max) = (15, 1.3, 1000)
+#(b_0, b_min, b_max) = (7, 1, 100)
 
 def make_cfg(filename, mr_min, rsq_min, rsq_max, n_tot):
     outfile = open(filename,"w")
@@ -64,9 +69,9 @@ sig_file = rt.TFile(options.sig,"READ")
 sig_tree = sig_file.Get("HggOutput")
 
 #set the cut values to probe
-mr_cuts = [.1 * x for x in xrange(4,8)]
-low_rsq_cut = [.005 * x for x in xrange(1,10)]
-low_rsq_width = [.005 * x for x in xrange(1,4)]
+mr_cuts = [.1 * x for x in xrange(6,7)]
+low_rsq_cut = [.005 * x for x in xrange(2,3)]
+low_rsq_width = [.005 * x for x in xrange(2,3)]
 
 print "MR SCAN", mr_cuts
 print "LOW RSQ SCAN", low_rsq_cut
@@ -125,16 +130,12 @@ for point in grid:
     print name
     
     #build the config
-    if n_events_high > 500 and n_events_low < 5000 and n_events_low > 1000 and perc_contam < .05 and perc_efficient > .8:
+    if n_events_high > 500 and n_events_low < 10000 and n_events_low > 1000 and perc_contam < .05 and perc_efficient > .8:
         print "\t\t@@@POINT PASSES GENERAL REQUIREMENTS@@@"
         make_cfg(name, mr_min, rsq_min, rsq_max, n_events_low)
         config_names.append(name)
         result = (mr_min, rsq_min, rsq_width, n_events_high, n_events_low, n_events_sig_total, n_events_low_sig, n_events_high_sig, perc_contam, perc_efficient)
         results.append(result)
-
-
-        
-    
 
 
 #use each config to convert the dataset to a roodataset
@@ -173,6 +174,7 @@ for config in config_names:
     bdiff = min(b_val - b_min, b_max - b_val ) / b_val
     ndiff = min(n_val - n_min, n_max - n_val ) / n_val
     m0diff = 0
+    
     if m0_val != 0:
         m0diff = min(m0_val - m0_min, m0_max - m0_val) / m0_val
     else:
@@ -183,7 +185,7 @@ for config in config_names:
     if abs(ndiff) < .05:
         warnings.append( "\t\t\t WARNING N PARAM NEAR LIMIT " + config)
     if abs(m0diff) < .05:
-        warnings.append( "\t\t\t WARNING m0 PRAM  NEAR LIMIT " + config)
+        pass #warnings.append( "\t\t\t WARNING m0 PRAM  NEAR LIMIT " + config)
 
     fit_result = (norm_val, m0_val, m0_error, n_val, n_error,  b_val, b_error,  config)
 
@@ -201,6 +203,7 @@ for result in results:
             print "%.4f \t" % ii,
     print "\n"
 
+print "\n"
 #print the parameters of the fit
 print "norm\t\tm0\tm0_e\tn\tn_e\tb\tb_e"
 for param in fit_results:
