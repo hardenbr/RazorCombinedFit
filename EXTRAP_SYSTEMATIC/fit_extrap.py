@@ -105,28 +105,48 @@ def build68graph(error_summary, bins, name):
     delta = []
 
     for ii in range(len(x)):
-        win_size = (r_x[ii] - l_x[ii])
+        win_size_r = (r_x[ii] - x[ii])
+        win_size_l = (x[ii] - l_x[ii])
+        win_size = win_size_r + win_size_l + 1
+
 #        print r_x[ii], l_x[ii]
 #        print "win_size", win_size
-        if win_size == 0: win_size = 1
 
+        if win_size_r == 0 or win_size_l == 0: win_size = 1
 
         if x[ii] > 1:
-            ex_up.append((r_x[ii] - x[ii]) / win_size)
-            ex_down.append((x[ii] - l_x[ii]) / win_size)
-            obs_val.append((nobs[ii] - x[ii]) / win_size)
-            delta.append((nobs[ii] - x[ii]) / win_size)
+
+            exp_up_val = 2*(r_x[ii] - x[ii]) / win_size
+            exp_down_val = 2*(x[ii] - l_x[ii]) / win_size
+            obs_value = 2*(nobs[ii] - x[ii]) / win_size
+            if nobs[ii] > x[ii]:
+                obs_value = 2*(nobs[ii] - x[ii]) / win_size
+                
+            ex_up.append(exp_up_val)
+            ex_down.append(exp_down_val)
+            obs_val.append(obs_value)
+            delta.append(obs_val[ii])
+
+            print "----WINDOW %s BIN %i----" % (name,ii)
+            print "win_size_l", win_size_l
+            print "win_size_r", win_size_r
+            print "ex_up", ex_up[ii]
+            print "ex_down", ex_down[ii]
+            print "obs_val", obs_val[ii]
+            print "delta", delta[ii]
+            print "\n"
+
         else:
-            ex_down.append((r_x[ii] - x[ii]) / win_size)
-            ex_up.append(0)
-            obs_val.append((nobs[ii]) / win_size)
+            ex_down.append(0)
+            ex_up.append(1)
+            obs_value = (nobs[ii] - x[ii]) / win_size
+            if nobs[ii] == 0:
+                obs_value = 0
+            
+            obs_val.append(obs_value)
+            
             delta.append((nobs[ii] - x[ii]) / win_size)
 
-    print "win_size", win_size
-    print "ex_up", ex_up
-    print "ex_down", ex_down
-    print "obs_val", obs_val
-    print "delta", delta
 
     adjusted_bins = []
 
@@ -138,35 +158,35 @@ def build68graph(error_summary, bins, name):
     for ii in range(len(width)):
         adjusted_bins[ii] += width[ii]
 
-    bins_ar = array.array("d",adjusted_bins)
-    x_ar = array.array("d", x)
-    y_ar = array.array("d", y)
-    ey_u_ar = array.array("d", ex_up)
-    ey_d_ar = array.array("d", ex_down)
-    width_ar = array.array("d", width)
-    obs_val_ar = array.array("d", obs_val) 
+    bins_ar = array.array("f",adjusted_bins)
+    x_ar = array.array("f", x)
+    y_ar = array.array("f", y)
+    ey_u_ar = array.array("f", ex_up)
+    ey_d_ar = array.array("f", ex_down)
+    width_ar = array.array("f", width)
+    obs_val_ar = array.array("f", obs_val) 
 
 
     mg = rt.TMultiGraph(name,name)
     
-    gr = rt.TGraphAsymmErrors(len(x),  bins_ar, y_ar, width_ar, width_ar, ey_u_ar, ey_d_ar)
+    gr = rt.TGraphAsymmErrors(len(x),  bins_ar, y_ar, width_ar, width_ar, ey_d_ar, ey_u_ar)
     gr.SetLineColor(rt.kBlack)
     gr.SetLineWidth(2)
     gr.SetFillColor(rt.kBlue-9)
 #    gr.SetFillStyle(3000)
     
-    gr2 = rt.TGraphAsymmErrors(len(x),  bins_ar, obs_val_ar, y_ar, y_ar, y_ar,y_ar)
+    gr2 = rt.TGraphAsymmErrors(len(x), bins_ar, obs_val_ar, y_ar, y_ar, y_ar,y_ar)
     gr2.SetMarkerStyle(20)
     gr2.SetMarkerSize(1.4)
     
-    mg.Add(gr)
-    mg.Add(gr2)
+#    mg.Add(gr)
+#    mg.Add(gr2)
 
-    mg.SetMinimum(bins[0])
-    mg.SetMaximum(bins[-1])    
-    mg.SetTitle(name)
+#    mg.SetMinimum(bins[0])
+#    mg.SetMaximum(bins[-1])    
+#    mg.SetTitle(name)
     
-    return (hist_exp_up, hist_exp_down, mg)
+    return (hist_exp_up, hist_exp_down, gr,gr2)
 
 #exponentially increasing bin sizes
 def makebins(start_,end_,inc_,inc_inc_):
@@ -329,7 +349,7 @@ def get_smallest68_hist(exp, hist):
 
             #once we have containment return a tuple ( sigma_eff, left value, right_value)            
             if left_val == right_val:
-                return (1,hist.GetBinLowEdge(left_edge),hist.GetBinLowEdge(left_edge+1)) #special case of 68 existing in one bin
+                return (1, hist.GetBinLowEdge(left_edge),hist.GetBinLowEdge(left_edge+1)) #special case of 68 existing in one bin
             else:
                 return (float(right_val - left_val + 1) / 2., left_val, right_val)
 
@@ -484,10 +504,23 @@ print "TREE CHECK: ", tree.GetEntries()
 
 
 #hist_high_pred = rt.TH1F("hist_high_pred","High Rsq Pred",len(bins)-1,array.array("d",bins))
+
+name_sample_string = "#gamma#gamma"
+if options.samp == 1:
+    name_sample_string = "ff"
+if options.mix_file != "no_file":
+    name_sample_string = "ff + signal"
+    
+#study_sample_string = "Razor #gamma#gamma + #geq 1 jet: "
+#if options.samp == 1:
+#    study_sample_string+="Low R^{2} Fit"
+#if options.mix_file != "no_file":
+#    study_sample_string+=""
+
 hist_signal = rt.TH1F("hist_signal","Signal",len(bins)-1,array.array("d",bins))
-hist_low_rsq_data = rt.TH1F("hist_low_data","Low Rsq Data",len(bins)-1,array.array("d",bins))
-hist_high_rsq_data = rt.TH1F("hist_high_data","High Rsq Data",len(bins)-1,array.array("d",bins))
-hist_high_rsq_signal = rt.TH1F("hist_high_signal","High Rsq Signal",len(bins)-1,array.array("d",bins))
+hist_low_rsq_data = rt.TH1F("hist_low_data","Low R^{2} Data (%s)" % name_sample_string, len(bins)-1,array.array("d",bins))
+hist_high_rsq_data = rt.TH1F("hist_high_data","High R^{2} Data (%s)" % name_sample_string, len(bins)-1,array.array("d",bins))
+hist_high_rsq_signal = rt.TH1F("hist_high_signal","High R^{2} Signal", len(bins)-1,array.array("d",bins))
 
 low_cut_data = "(PFMR/1000.)>%f && PFR^2 > %f && PFR^2 < %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min,r0_cut, r1_cut,options.samp)
 high_cut_data = "(PFMR/1000.)>%f && PFR^2 > %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min,r1_cut,options.samp)
@@ -756,9 +789,8 @@ hist_ratio.GetYaxis().SetTitleSize(.07)
 
 hist_high_pred.GetXaxis().SetTitle("M_{R} [TeV]")
 hist_high_pred.GetYaxis().SetTitle("N Events")
-
 hist_high_pred.GetXaxis().SetTitleSize(.07)
-hist_high_pred.GetYaxis().SetTitleSize(.07)
+hist_high_pred.GetYaxis().SetLabelSize(.13)
 
 hist_high_rsq_data.SetMarkerStyle(14)
 hist_high_rsq_data.GetYaxis().SetTitle("N Events")
@@ -1010,17 +1042,34 @@ hist_pull_high.Write()
 hist_pull_low.Write()
 
 #build the graphs that will go in the canvas
-(high_exp_up, high_exp_down, graph68_high) = build68graph(error_sum_high, bins, "high")
+(high_exp_up, high_exp_down, graph68_high_exp, graph68_high_obs) = build68graph(error_sum_high, bins, "high")
 #error_sum_high.clear_vals()
-(low_exp_up, low_exp_down, graph68_low) =  build68graph(error_sum_low, bins, "low")
+(low_exp_up, low_exp_down, graph68_low_exp, graph68_low_obs) =  build68graph(error_sum_low, bins, "low")
+
+high_exp_down.GetXaxis().SetTitle("M_{R} [TeV]")
+high_exp_down.GetYaxis().SetTitle("N Events")
+high_exp_down.GetYaxis().SetTitleSize(.12)
+high_exp_down.GetYaxis().SetLabelSize(.09)
+high_exp_down.GetYaxis().SetTitleSize(.10)
+high_exp_down.GetYaxis().SetTitleOffset(.65)
+
+low_exp_down.GetXaxis().SetTitle("M_{R} [TeV]")
+low_exp_down.GetYaxis().SetTitle("N Events")
+low_exp_down.GetYaxis().SetTitleSize(.10)
+low_exp_down.GetYaxis().SetTitleOffset(.65)
+low_exp_down.GetYaxis().SetLabelSize(.09)
 
 high_exp_up.Write()
 high_exp_down.Write()
 low_exp_up.Write()
 low_exp_down.Write()
 
-graph68_high.Write("highgraph")
-graph68_low.Write("lowgraph")
+print "Writing graphs"
+
+graph68_high_exp.Write("highgraph")
+graph68_low_exp.Write("lowgraph")
+graph68_high_obs.Write("highgraph_obs")
+graph68_low_obs.Write("lowgraph_obs")
 
 file.Close()
 
