@@ -82,8 +82,15 @@ def build68graph(error_summary, bins, name):
     #build the sigma up and sigma down histograms
     hist_exp_up = rt.TH1F("hist_%s_up" % name,"68% Toy Window",len(bins)-1,array.array("d",bins))
     hist_exp_down = rt.TH1F("hist_%s_down" % name,"expectation sigma down",len(bins)-1,array.array("d",bins))
+
+    hist_err_up = rt.TH1F("hist_%s_err_up" % name, "", len(bins)-1, array.array("d",bins))
+    hist_err_down = rt.TH1F("hist_%s_err_down" % name, "", len(bins)-1, array.array("d",bins))
+
     for bin in range(len(r_x)): hist_exp_up.SetBinContent(bin+1, r_x[bin])
     for bin in range(len(l_x)): hist_exp_down.SetBinContent(bin+1, l_x[bin])
+
+    for bin in range(len(x)): hist_err_up.SetBinContent(bin+1, (r_x[bin] - x[bin]) / x[bin])
+    for bin in range(len(x)): hist_err_down.SetBinContent(bin+1, (x[bin] - l_x[bin]) / x[bin])
 
     print "nobs",nobs,"\n"
     print "x", x,"\n"
@@ -112,7 +119,7 @@ def build68graph(error_summary, bins, name):
 #        print r_x[ii], l_x[ii]
 #        print "win_size", win_size
 
-        if win_size_r == 0 or win_size_l == 0: win_size = 1
+#        if win_size_r == 0 or win_size_l == 0: win_size = 1
 
         if x[ii] > 1:
 
@@ -150,10 +157,7 @@ def build68graph(error_summary, bins, name):
 
     adjusted_bins = []
 
-    for ii in bins:
-        adjusted_bins.append(ii)
-
-    print "PRE ADJUSTEMENT", adjusted_bins
+    for ii in bins: adjusted_bins.append(ii)
     
     for ii in range(len(width)):
         adjusted_bins[ii] += width[ii]
@@ -179,14 +183,9 @@ def build68graph(error_summary, bins, name):
     gr2.SetMarkerStyle(20)
     gr2.SetMarkerSize(1.4)
     
-#    mg.Add(gr)
-#    mg.Add(gr2)
 
-#    mg.SetMinimum(bins[0])
-#    mg.SetMaximum(bins[-1])    
-#    mg.SetTitle(name)
     
-    return (hist_exp_up, hist_exp_down, gr,gr2)
+    return (hist_exp_up, hist_exp_down, gr, gr2, hist_err_up, hist_err_down)
 
 #exponentially increasing bin sizes
 def makebins(start_,end_,inc_,inc_inc_):
@@ -339,8 +338,11 @@ def get_smallest68_hist(exp, hist):
 
         if left_edge < 1 : left_edge = 1            
         if right_edge > high_bin: right_edge = high_bin
-                
+
+
         integral = float(hist.Integral(left_edge, right_edge))
+        if left_edge == right_edge:
+            integral = hist.GetBinContent(left_edge)
         containment = integral / total_events
 
         if containment > .68:
@@ -349,7 +351,10 @@ def get_smallest68_hist(exp, hist):
 
             #once we have containment return a tuple ( sigma_eff, left value, right_value)            
             if left_val == right_val:
-                return (1, hist.GetBinLowEdge(left_edge),hist.GetBinLowEdge(left_edge+1)) #special case of 68 existing in one bin
+                if exp > .1:
+                    return (1, hist.GetBinLowEdge(left_edge),hist.GetBinLowEdge(left_edge+1)) #special case of 68 existing in one bin
+                else:
+                    return (1, hist.GetBinLowEdge(left_edge),hist.GetBinLowEdge(left_edge)) #special case of 68 existing in one bin
             else:
                 return (float(right_val - left_val + 1) / 2., left_val, right_val)
 
@@ -517,16 +522,31 @@ if options.mix_file != "no_file":
 #if options.mix_file != "no_file":
 #    study_sample_string+=""
 
+#HIGH AND LOW RSQ DATA + SIGNAL HISTOGRAMS
 hist_signal = rt.TH1F("hist_signal","Signal",len(bins)-1,array.array("d",bins))
 hist_low_rsq_data = rt.TH1F("hist_low_data","Low R^{2} Data (%s)" % name_sample_string, len(bins)-1,array.array("d",bins))
 hist_high_rsq_data = rt.TH1F("hist_high_data","High R^{2} Data (%s)" % name_sample_string, len(bins)-1,array.array("d",bins))
 hist_high_rsq_signal = rt.TH1F("hist_high_signal","High R^{2} Signal", len(bins)-1,array.array("d",bins))
 
+#JES HISTOGRAMS
+hist_high_rsq_jes_up = rt.TH1F("hist_high_data_up","High R^{2} Data (%s) JES UP" % name_sample_string, len(bins)-1,array.array("d",bins))
+hist_high_rsq_jes_down = rt.TH1F("hist_high_data_down","High R^{2} Data (%s) JES DOWN" % name_sample_string, len(bins)-1,array.array("d",bins))
+hist_low_rsq_jes_up = rt.TH1F("hist_low_data_up","High R^{2} Data (%s) JES UP" % name_sample_string, len(bins)-1,array.array("d",bins))
+hist_low_rsq_jes_down = rt.TH1F("hist_low_data_down","High R^{2} Data (%s) JES DOWN" % name_sample_string, len(bins)-1,array.array("d",bins))
+
+
 low_cut_data = "(PFMR/1000.)>%f && PFR^2 > %f && PFR^2 < %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min,r0_cut, r1_cut,options.samp)
 high_cut_data = "(PFMR/1000.)>%f && PFR^2 > %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min,r1_cut,options.samp)
 
-low_cut_signal = "(PFMR)>%f && PFR^2 > %f && PFR^2 < %f " % (mr_min,r0_cut, r1_cut)
-high_cut_signal = "(PFMR)>%f && PFR^2 > %f" % (mr_min,r1_cut)
+#JES CUTS
+low_cut_data_up = "(PFMR_UP/1000.)>%f && PFR_UP^2 > %f && PFR_UP^2 < %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min,r0_cut, r1_cut,options.samp)
+high_cut_data_up = "(PFMR_UP/1000.)>%f && PFR_UP^2 > %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min, r1_cut, options.samp)
+
+low_cut_data_down = "(PFMR_DOWN/1000.)>%f && PFR_DOWN^2 > %f && PFR_DOWN^2 < %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min, r0_cut, r1_cut,options.samp)
+high_cut_data_down = "(PFMR_DOWN/1000.)>%f && PFR_DOWN^2 > %f && iSamp==%i && PhotonPFCiC.sieie[0] > .0001 && PhotonPFCiC.sieie[1] > .0001" % (mr_min, r1_cut, options.samp)
+
+low_cut_signal = "(PFMR)>%f && PFR^2 > %f && PFR^2 < %f " % (mr_min, r0_cut, r1_cut)
+high_cut_signal = "(PFMR)>%f && PFR^2 > %f" % (mr_min, r1_cut)
 
 print low_cut_data
 print high_cut_data
@@ -674,6 +694,13 @@ def get_bin_errors(fr, norm):
 
 tree.Draw("PFMR/1000>>hist_low_data",low_cut_data)
 tree.Draw("PFMR/1000>>hist_high_data",high_cut_data)
+
+#JES HISTOGRAMS
+tree.Draw("PFMR_UP/1000>>hist_high_data_up", high_cut_data_up)
+tree.Draw("PFMR_DOWN/1000>>hist_high_data_down", high_cut_data_down)
+tree.Draw("PFMR_UP/1000>>hist_low_data_up", low_cut_data_up)
+tree.Draw("PFMR_DOWN/1000>>hist_low_data_down", low_cut_data_down)
+
 
 if do_mix:
     tree_signal.Draw("PFMR>>hist_signal",high_cut_signal)
@@ -969,6 +996,7 @@ def get_canvases_and_68win(hists, name):
 
         #add it to the list of istirubtions
         bin_dists.append(toy_dist)
+
         
         if exp_val > 1:
             delta_text.AddText("#Delta = 2(N_{data} - N_{exp}) / win_{68} = 2(%2.1f - %2.1f) / %2.0f = %2.2f" % (true_val, exp_val, 2*window68[0] ,delta));
@@ -1042,9 +1070,9 @@ hist_pull_high.Write()
 hist_pull_low.Write()
 
 #build the graphs that will go in the canvas
-(high_exp_up, high_exp_down, graph68_high_exp, graph68_high_obs) = build68graph(error_sum_high, bins, "high")
+(high_exp_up, high_exp_down, graph68_high_exp, graph68_high_obs, hist_high_err_up, hist_high_err_down) = build68graph(error_sum_high, bins, "high")
 #error_sum_high.clear_vals()
-(low_exp_up, low_exp_down, graph68_low_exp, graph68_low_obs) =  build68graph(error_sum_low, bins, "low")
+(low_exp_up, low_exp_down, graph68_low_exp, graph68_low_obs, hist_low_err_up, hist_low_err_down) =  build68graph(error_sum_low, bins, "low")
 
 high_exp_down.GetXaxis().SetTitle("M_{R} [TeV]")
 high_exp_down.GetYaxis().SetTitle("N Events")
@@ -1064,13 +1092,22 @@ high_exp_down.Write()
 low_exp_up.Write()
 low_exp_down.Write()
 
+hist_low_err_up.Write()
+hist_low_err_down.Write()
+
+hist_high_err_up.Write()
+hist_high_err_down.Write()
+
 print "Writing graphs"
 
 graph68_high_exp.Write("highgraph")
 graph68_low_exp.Write("lowgraph")
 graph68_high_obs.Write("highgraph_obs")
 graph68_low_obs.Write("lowgraph_obs")
-
+hist_high_rsq_jes_up.Write() 
+hist_high_rsq_jes_down.Write() 
+hist_low_rsq_jes_up.Write() 
+hist_low_rsq_jes_down.Write() 
 file.Close()
 
 if do_mix:
