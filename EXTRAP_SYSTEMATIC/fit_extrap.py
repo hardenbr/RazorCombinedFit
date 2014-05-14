@@ -80,7 +80,7 @@ def build68graph(error_summary, bins, name):
     l_x = error_summary.get_l68()
 
     #build the sigma up and sigma down histograms
-    hist_exp_up = rt.TH1F("hist_%s_up" % name,"68% Toy Window",len(bins)-1,array.array("d",bins))
+    hist_exp_up = rt.TH1F("hist_%s_up" % name,"68% pseudo-experiment Window",len(bins)-1,array.array("d",bins))
     hist_exp_down = rt.TH1F("hist_%s_down" % name,"expectation sigma down",len(bins)-1,array.array("d",bins))
 
     hist_err_up = rt.TH1F("hist_%s_err_up" % name, "", len(bins)-1, array.array("d",bins))
@@ -146,13 +146,13 @@ def build68graph(error_summary, bins, name):
         else:
             ex_down.append(0)
             ex_up.append(1)
-            obs_value = (nobs[ii] - x[ii]) / win_size
+            obs_value = (nobs[ii] - x[ii]) / (win_size - 1)
             if nobs[ii] == 0:
                 obs_value = 0
             
             obs_val.append(obs_value)
             
-            delta.append((nobs[ii] - x[ii]) / win_size)
+            delta.append((nobs[ii] - x[ii]) / (win_size - 1))
 
 
     adjusted_bins = []
@@ -285,6 +285,10 @@ parser.add_option("--mu", dest="mu",
                  default=1.0,
                  action="store",type="float")
 
+parser.add_option("--t5gg", dest="t5gg",
+                 help="flag to run t5gg limit",
+                 action="store_true",default=False)
+
 (options, args) = parser.parse_args()
 
 parser.print_help()
@@ -300,7 +304,10 @@ r1_cut = options.rsq2
 r0 = r0_cut
 r1 = r1_cut
 
+#bins = [0.6, 0.7, 0.82, 0.964, 1.1368,  2.2499084799999998, 2.679890176, 3.1958682111999996, 3.8150418534399995, 4.558050224127999] #combination bin
+#bins = [0.6, 0.7, 0.82, 0.964, 1.1368, 1.34416, 1.592992, 1.8915904, 2.2499084799999998,  4.558050224127999]
 bins = makebins(mr_min, 4.5, .1, .2)
+print bins
 fit_toy_summary = fit_toy_summary()
 mr_cutoff = bins[-1]
 rsq_cutoff = 1
@@ -336,18 +343,36 @@ def get_smallest68_hist(exp, hist):
         left_edge = exp_bin - width_left
         right_edge = exp_bin + width_right
 
-        if left_edge < 1 : left_edge = 1            
-        if right_edge > high_bin: right_edge = high_bin
-
+        if left_edge < 1 : left_edge = 1  #cant go below zero
+        if right_edge > high_bin: right_edge = high_bin #cant go outside bounds
 
         integral = float(hist.Integral(left_edge, right_edge))
+        
         if left_edge == right_edge:
             integral = hist.GetBinContent(left_edge)
+
         containment = integral / total_events
 
         if containment > .68:
-            left_val = hist.GetBinLowEdge(left_edge)
-            right_val = hist.GetBinLowEdge(right_edge)
+
+            left_val = hist.GetBinLowEdge(left_edge) 
+            right_val = hist.GetBinLowEdge(right_edge) + 1
+
+            #interpolate the exact place in the bin
+            if hist.GetBinLowEdge(right_edge) < 10:
+            
+                integral_minus_bin = float(hist.Integral(left_edge, right_edge - 1))
+                containment_minus_this_bin =  integral_minus_bin / total_events 
+                right_val_minus_1 = hist.GetBinLowEdge(right_edge-1) + 1                     
+                #correct the right value
+                print "contain minus", containment_minus_this_bin
+                print "right val", right_val
+                print "right val minus", right_val_minus_1
+                
+                right_val = (.68 - containment_minus_this_bin) * (right_val - right_val_minus_1) / (containment - containment_minus_this_bin) + right_val_minus_1
+
+                if right_edge == 1:
+                    right_val = (.68 / containment) 
 
             #once we have containment return a tuple ( sigma_eff, left value, right_value)            
             if left_val == right_val:
@@ -371,6 +396,24 @@ def get_smallest68_hist(exp, hist):
         else:
             width_right += 1
 
+def get_xsec_t5gg(xsec_file,mgl):
+    mgl = str(mgl)
+
+    file = open(xsec_file,"r")
+    lines = file.readlines()
+    lines_stripped = map(lambda(x):x.rstrip("\n"),lines)
+
+    #scan the lines
+    for line in lines:
+        if mgl in line:
+            #check the ordering is correct
+            split = line.split()
+
+            xsec = float(split[1])
+            xsec_plus = (float(split[2])) * xsec
+            xsec_minus = (float(split[2])) * xsec
+
+            return (xsec, xsec_plus, xsec_minus)
 
 def get_xsec(xsec_file, msq, mgl):
 
@@ -387,9 +430,9 @@ def get_xsec(xsec_file, msq, mgl):
             idx2 =  split.index(mgl)
             if idx1 < idx2:
                 #parse the values
-                lo_xsec = float(split[6])
-                lo_xsec_plus = float(split[8])
-                lo_xsec_minus = float(split[10])
+                lo_xsec = float(split[12])
+                lo_xsec_plus = float(split[14])
+                lo_xsec_minus = float(split[16])
 
                 return (lo_xsec,lo_xsec_plus,lo_xsec_minus)
             
@@ -406,7 +449,13 @@ def build_mixed_model(signal_file, xsec_file, mu, mr_min, rsq_min, outfile):
     msq = signal_name.split("_")[1]
     mgl = signal_name.split("_")[2]    
 
-    (xsec,xsec_plus,xsec_minus) = get_xsec(xsec_file, msq, mgl)
+
+    (xsec,xsec_plus,xsec_minus) = (0,0,0)
+
+    if options.t5gg:
+        (xsec,xsec_plus,xsec_minus) = get_xsec_t5gg(xsec_file, msq)
+    else:
+        (xsec,xsec_plus,xsec_minus) = get_xsec(xsec_file, msq, mgl)
 
     signal = rt.TFile(signal_file)
     signal_tree = signal.Get("HggOutput")
@@ -414,9 +463,12 @@ def build_mixed_model(signal_file, xsec_file, mu, mr_min, rsq_min, outfile):
     eff = signal_tree.GetEntries("PFMR > %f & PFR^2 > %f" % (mr_min, rsq_min)) / 10000.
 
     #calculate the number of signal events expected
-    n_events = int(eff * (xsec * 1000) * 20 * mu)
-    n_events_plus = int(eff * ((xsec+xsec_plus) * 1000) * 20 * mu)    
-    n_events_minus = int(eff * ((xsec-xsec_minus) * 1000) * 20 * mu)
+    n_events = int(eff * (xsec * 1000) * 19.7 * mu)
+    n_events_plus = int(eff * ((xsec+xsec_plus) * 1000) * 19.7 * mu)    
+    n_events_minus = int(eff * ((xsec-xsec_minus) * 1000) * 19.7 * mu)
+
+    print "EFFICIENCY FOR SIGNAL INJECTION", eff
+    print "XSEC FOR SIGNAL INJECTION", xsec
 
     #make the iteration list for signal
     signal_tree.Draw(">>iterlist","","entrylist")
@@ -483,7 +535,7 @@ def smallest_68(hist):
 do_mix =  options.mix_file != "no_file"
 tree_signal = None
 if do_mix:
-    (eff,ns_events, ns_events_plus, ns_events_minus) = build_mixed_model(options.mix_file, options.xsec_file, options.mu, mr_min, r0_cut, options.out_mix_file)
+    (eff,ns_events, ns_events_plus, ns_events_minus) = build_mixed_model(options.mix_file, options.xsec_file, options.mu, mr_min, r1_cut, options.out_mix_file)
     mix_file_output = rt.TFile(options.out_mix_file,"READ")
     tree_signal = mix_file_output.Get("HggOutput")
 
@@ -941,7 +993,7 @@ def get_canvases_and_68win(hists, name):
         #if window_l > 0: 
         wleft_line.Draw("same")
             
-        wright_line = rt.TLine(window_r+1, 0, window_r+1, max_hist)
+        wright_line = rt.TLine(window_r, 0, window_r, max_hist)
         wright_line.SetLineWidth(4)
         #wright_line.SetLineStyle(2)
         wright_line.SetLineColor(rt.kRed)
@@ -962,7 +1014,7 @@ def get_canvases_and_68win(hists, name):
         hists[ii].SetLineColor(rt.kAzure-9)
         
         legend = rt.TLegend(.415,.394,.86,.738)
-        legend.AddEntry(hists[ii],"Toy Distribution","f")
+        legend.AddEntry(hists[ii],"Pseudo-experiments","f")
         #legend.AddEntry(gaus,"Gaussian Fit","l")
         legend.AddEntry(line, "N Observed","l")
         legend.AddEntry(exp_line, "N Expected","l")
@@ -983,7 +1035,7 @@ def get_canvases_and_68win(hists, name):
         if exp_val > 1:
             delta = (true_val - exp_val) / window68[0]
         else:
-            delta = (true_val - exp_val) / (window68[0]*2)
+            delta = (true_val - exp_val) / (window68[0])
             #delta = float(true_val) / float(smallest_68(hists[ii]))
 
         delta_text.SetTextFont(42);
@@ -999,9 +1051,9 @@ def get_canvases_and_68win(hists, name):
 
         
         if exp_val > 1:
-            delta_text.AddText("#Delta = 2(N_{data} - N_{exp}) / win_{68} = 2(%2.1f - %2.1f) / %2.0f = %2.2f" % (true_val, exp_val, 2*window68[0] ,delta));
+            delta_text.AddText("#Delta = 2(N_{data} - N_{exp}) / win_{68} = 2(%2.1f - %2.1f) / %2.1f = %2.2f" % (true_val, exp_val, 2*window68[0] ,delta));
         else:
-            delta_text.AddText("#Delta = (N_{data} - N_{exp}) / win_{68} = (%2.1f - %2.1f) / %2.0f = %2.2f" % (true_val, exp_val, 2*window68[0] ,delta));
+            delta_text.AddText("#Delta = (N_{data} - N_{exp}) / win_{68} = (%2.1f - %2.1f) / %2.1f = %2.2f" % (true_val, exp_val, window68[0] ,delta));
             #delta_text.AddText("#Delta = N_{obs} /  (.68 range) = %2.2f" % delta)
 
         delta_text.Draw("same")

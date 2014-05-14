@@ -12,19 +12,25 @@ mr_max = 7
 #(b_0, b_min, b_max) = (7, 1, 100)
 
 #stable samp0
-#(m0_0, m0_min, m0_max) = (.1,-.3,.3)
-#(n_0, n_min, n_max) = (15, 1.3, 1000)
-#(b_0, b_min, b_max) = (7, 1, 100)
+(m0_0, m0_min, m0_max) = (.1,-.3,.3)
+(n_0, n_min, n_max) = (15, 1.3, 1000)
+(b_0, b_min, b_max) = (7, 1, 100)
 
 #stable samp1
-(m0_0, m0_min, m0_max) = (0,-1,1)
-(n_0, n_min, n_max) = (6, 4, 100)
-(b_0, b_min, b_max) = (8, 1, 10)
+#(m0_0, m0_min, m0_max) = (0,-1,1)
+#(n_0, n_min, n_max) = (6, 4, 100)
+#(b_0, b_min, b_max) = (8, 1, 10)
+
+#stabple samp1 post jes
+#(m0_0, m0_min, m0_max) = (0,-.3,.5)
+#(n_0, n_min, n_max) = (50, 1.5, 1000)
+#(b_0, b_min, b_max) = (8, 2, 10)
 
 #test
-#(m0_0, m0_min, m0_max) = (.1,-.3,.3)
-#(n_0, n_min, n_max) = (15, 1.3, 1000)
-#(b_0, b_min, b_max) = (7, 1, 100)
+#(m0_0, m0_min, m0_max) = (0,-.3,.5)
+#(n_0, n_min, n_max) = (50, 1.5, 1000)
+#(b_0, b_min, b_max) = (8, 2, 10)
+
 
 def make_cfg(filename, mr_min, rsq_min, rsq_max, n_tot):
     outfile = open(filename,"w")
@@ -69,9 +75,9 @@ sig_file = rt.TFile(options.sig,"READ")
 sig_tree = sig_file.Get("HggOutput")
 
 #set the cut values to probe
-mr_cuts = [.1 * x for x in xrange(6,7)]
-low_rsq_cut = [.005 * x for x in xrange(2,3)]
-low_rsq_width = [.005 * x for x in xrange(2,3)]
+mr_cuts = [.6]#[.1 * x for x in xrange(6,7)]
+low_rsq_cut = [.02]#[.005 * x for x in xrange(2,3)]
+low_rsq_width = [.005]#[.005 * x for x in xrange(2,3)]
 
 print "MR SCAN", mr_cuts
 print "LOW RSQ SCAN", low_rsq_cut
@@ -130,7 +136,7 @@ for point in grid:
     print name
     
     #build the config
-    if n_events_high > 500 and n_events_low < 10000 and n_events_low > 1000 and perc_contam < .05 and perc_efficient > .8:
+    if n_events_high > 500 and n_events_low < 10000 and n_events_low > 500 and perc_contam < .05 and perc_efficient > .8:
         print "\t\t@@@POINT PASSES GENERAL REQUIREMENTS@@@"
         make_cfg(name, mr_min, rsq_min, rsq_max, n_events_low)
         config_names.append(name)
